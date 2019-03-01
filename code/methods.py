@@ -4,9 +4,10 @@ from keras.layers import SimpleRNN, Dense
 from keras.layers import Input, TimeDistributed
 from tqdm import tqdm
 
+import itertools
+
 from typing import Union
 import numpy as np
-
 
 class Network(object):
     def __init__(self, features, cells, layers, bias=False, recurrent=False):
@@ -31,16 +32,17 @@ class Network(object):
         self.parameters = np.sum([p_layer_1, p_layer_n, p_layer_out])
         # Build network
         cell = SimpleRNN if recurrent else Dense
-        self.inputs, x = Input(shape=(self.parameters // self.features, self.features,)), None
+        self.inputs, x = Input(shape=(self.parameters // self.features,
+                                      self.features) if recurrent else (self.features,)), None
 
         for layer in range(self.num_layer):
             if recurrent:
-                x = SimpleRNN(cells, activation=None, use_bias=False,
+                x = SimpleRNN(self.cells, activation=None, use_bias=False,
                               return_sequences=True)(self.inputs if layer == 0 else x)
             else:
-                x = Dense(cells, activation=None, use_bias=False,
+                x = Dense(self.cells, activation=None, use_bias=False,
                               )(self.inputs if layer == 0 else x)
-        self.outputs = Dense(self.features, activation=None, use_bias=False)(x)
+        self.outputs = Dense(self.features if recurrent else 1, activation=None, use_bias=False)(x)
         print('Network initialized, i haz {p} params @:{e}Features: {f}{e}Cells: {c}{e}Layers: {l}'.format(
             p=self.parameters, l=self.num_layer, c=self.cells, f=self.features, e='\n{}'.format(' ' * 5))
         )
@@ -65,10 +67,8 @@ class _BaseNetwork(Model):
         flat = np.asarray(np.concatenate([x.flatten() for x in weights]))
         return flat
 
-    def step(self):
-        flat = self.get_weights_flat()
-        x = np.reshape(flat, (1, -1, self.features))
-        return self.predict(x).flatten()
+    def step(self, x):
+        pass
 
     def step_other(self, other: Union[Sequential, Model]) -> bool:
         pass
@@ -98,13 +98,18 @@ class RecurrentNetwork(_BaseNetwork):
         self.parameters = network.parameters
         assert self.parameters == self.get_parameter_count()
 
+    def step(self, x):
+        shaped = np.reshape(x, (1, -1, self.features))
+        return self.predict(shaped).flatten()
+
     def fit(self, epochs=500, **kwargs):
         losses = []
         with tqdm(total=epochs, ascii=True,
                   desc='Type: {t}'. format(t=self.__class__.__name__),
                   postfix=["Loss", dict(value=0)]) as bar:
             for _ in range(epochs):
-                y = self.step()
+                x = self.get_weights_flat()
+                y = self.step(x)
                 weights = self.get_weights()
                 global_idx = 0
                 for idx, weight_matrix in enumerate(weights):
@@ -125,7 +130,14 @@ class FeedForwardNetwork(_BaseNetwork):
         self.features = network.features
         self.parameters = network.parameters
         self.num_layer = network.num_layer
-        assert self.parameters == self.get_parameter_count()
+        self.num_cells = network.cells
+        # assert self.parameters == self.get_parameter_count()
+
+    def step(self, x):
+        return self.predict(x)
+
+    def step_other(self, x):
+        return self.predict(x)
 
     def fit(self, epochs=500, **kwargs):
         losses = []
@@ -133,28 +145,28 @@ class FeedForwardNetwork(_BaseNetwork):
                   desc='Type: {t} @ Epoch:'. format(t=self.__class__.__name__),
                   postfix=["Loss", dict(value=0)]) as bar:
             for _ in range(epochs):
-                y = self.step()
+                all_weights = self.get_weights_flat()
+                cell_idx = np.apply_along_axis(lambda x: x/self.num_cells, 0, np.arange(int(self.get_parameter_count())))
+                xc = np.concatenate((all_weights[..., None], cell_idx[..., None]), axis=1)
+
+                y = self.step(xc)
+
                 weights = self.get_weights()
-                # This is where i have to apply the aggregator
                 global_idx = 0
-                # This is where the weights are assigned to the new ones
+
                 for idx, weight_matrix in enumerate(weights):
-                    if self.num_layer == 1:
-                        # In case of dense layers with a single layer, the RNN procedure can be applied
-                        flattened = weight_matrix.flatten()
-                    else:
-                        # In case of multiple layers, a function aggregator has to be applied first.
-                        # possible aggregators are: Mean, Transformation, Spektral analysis
-                        pass
-                    new_weights = y[global_idx:global_idx + flattened.shape[0]]
+
+                    # UPDATE THE WEIGHTS
+                    flattened = weight_matrix.flatten()
+                    new_weights = y[global_idx:global_idx + flattened.shape[0], 0]
                     weights[idx] = np.reshape(new_weights, weight_matrix.shape)
                     global_idx += flattened.shape[0]
-                losses.append(self.mean_sqrd_error(y.flatten(), self.get_weights_flat()))
+
+                losses.append(self.mean_sqrd_error(y[:, 0].flatten(), self.get_weights_flat()))
                 self.set_weights(weights)
                 bar.postfix[1]["value"] = losses[-1]
                 bar.update()
         return losses
-
 
 
 if __name__ == '__main__':
