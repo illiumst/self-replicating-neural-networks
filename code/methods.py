@@ -176,7 +176,7 @@ class Experiment:
     
     @staticmethod
     def from_dill(path):
-        with open(path) as dill_file:
+        with open(path, "r") as dill_file:
             return dill.load(dill_file)
     
     def __init__(self, name=None, id=None):
@@ -190,6 +190,7 @@ class Experiment:
         self.dir = self.base_dir + "experiments/exp-" + str(self.experiment_name) + "-" + str(self.experiment_id) + "-" + str(self.next_iteration) + "/"
         os.mkdir(self.dir)
         print("** created " + str(self.dir))
+        return self
     
     def __exit__(self, exc_type, exc_value, traceback):
         self.save(experiment=self)
@@ -211,8 +212,10 @@ if __name__ == '__main__':
             network = Network(features, cells, layers, recurrent=use_recurrent)
             r = RecurrentNetwork(network)
             loss = r.fit(epochs=10)
+            exp.save(rnet=r)
         else:
             network = Network(features, cells, layers, recurrent=use_recurrent)
             ff = FeedForwardNetwork(network)
             loss = ff.fit(epochs=10)
+            exp.save(ffnet=ff)
         print(loss)
