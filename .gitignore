@@ -5,6 +5,7 @@
 ### Local Datasets ###
 code/raw_runs
 code/processed_runs
+experiments/
 
 
 ### Data ###
