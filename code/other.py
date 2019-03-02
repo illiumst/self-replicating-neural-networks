@@ -1,8 +1,5 @@
-import os
-import time
 import math
 import copy
-import dill
 
 import numpy as np
 import tensorflow as tf
@@ -11,34 +8,8 @@ from keras.layers import SimpleRNN, Dense
 from keras.layers import Input, TimeDistributed
 from tqdm import tqdm
 
-class Experiment:
-    
-    @staticmethod
-    def from_dill(path):
-        with open(path, "r") as dill_file:
-            return dill.load(dill_file)
-    
-    def __init__(self, name=None, id=None):
-        self.experiment_id = id or time.time()
-        this_file = os.path.realpath(__file__)
-        self.experiment_name = name or os.path.basename(this_file)
-        self.base_dir = os.path.realpath((os.path.dirname(this_file) + "/..")) + "/"
-        self.next_iteration = 0
-    
-    def __enter__(self):
-        self.dir = self.base_dir + "experiments/exp-" + str(self.experiment_name) + "-" + str(self.experiment_id) + "-" + str(self.next_iteration) + "/"
-        os.mkdir(self.dir)
-        print("** created " + str(self.dir))
-        return self
-    
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.save(experiment=self)
-        self.next_iteration += 1
-    
-    def save(self, **kwargs):
-        for name,value in kwargs.items():
-            with open(self.dir + "/" + str(name) + ".dill", "wb") as dill_file:
-                dill.dump(value, dill_file)
+from experiment import Experiment
+
 
 def normalize_id(value, norm):
     if norm > 1:
@@ -64,24 +35,16 @@ def are_weights_within(network_weights, lower_bound, upper_bound):
                     return False
     return True
 
-  
-class WeightwiseNeuralNetwork:
+
+
+class NeuralNetwork:
     
     def __init__(self, width, depth, **keras_params):
-        
-        # set up parameters
         self.width = width
         self.depth = depth
         self.params = dict(epsilon=0.00000000000001)
         self.keras_params = dict(activation='linear', use_bias=False)
         self.keras_params.update(keras_params)
-        
-        #build network
-        self.model = Sequential()
-        self.model.add(Dense(units=width, input_dim=4, **self.keras_params))
-        for _ in range(depth-1):
-            self.model.add(Dense(units=width, **self.keras_params))
-        self.model.add(Dense(units=1, **self.keras_params))
     
     def set_params(self, **kwargs):
         self.params.update(kwargs)
@@ -94,27 +57,6 @@ class WeightwiseNeuralNetwork:
         
     def set_weights(self, new_weights):
         return self.model.set_weights(new_weights)
-    
-    def apply(self, *input):
-        stuff = np.transpose(np.array([[input[0]], [input[1]], [input[2]], [input[3]]]))
-        return self.model.predict(stuff)[0][0]
-        
-    def apply_to_weights(self, old_weights):
-        new_weights = copy.deepcopy(old_weights)
-        max_layer_id = len(old_weights) - 1
-        for layer_id,layer in enumerate(old_weights):
-            max_cell_id = len(layer) - 1
-            for cell_id,cell in enumerate(layer):
-                max_weight_id = len(cell) - 1
-                for weight_id,weight in enumerate(cell):
-                    normal_layer_id = normalize_id(layer_id, max_layer_id)
-                    normal_cell_id = normalize_id(cell_id, max_cell_id)
-                    normal_weight_id = normalize_id(weight_id, max_weight_id)
-                    new_weight = self.apply(weight, normal_layer_id, normal_cell_id, normal_weight_id)
-                    new_weights[layer_id][cell_id][weight_id] = new_weight
-                    if self.params.get("print_all_weight_updates", False):
-                        print("updated old weight " + str(weight) + "\t @ (" + str(layer_id) + "," + str(cell_id) + "," + str(weight_id) + ") to new value " + str(new_weight) + "\t calling @ (" + str(normal_layer_id) + "," + str(normal_cell_id) + "," + str(normal_weight_id) + ")")
-        return new_weights
 
     def apply_to_network(self, other_network):
         new_weights = self.apply_to_weights(other_network.get_weights())
@@ -165,10 +107,45 @@ class WeightwiseNeuralNetwork:
         print(self.repr_weights())
 
 
+
+class WeightwiseNeuralNetwork(NeuralNetwork):
+    
+    def __init__(self, width, depth, **keras_params):
+        super().__init__(width, depth, **keras_params)
+        self.model = Sequential()
+        self.model.add(Dense(units=width, input_dim=4, **self.keras_params))
+        for _ in range(depth-1):
+            self.model.add(Dense(units=width, **self.keras_params))
+        self.model.add(Dense(units=1, **self.keras_params))
+    
+    def apply(self, *input):
+        stuff = np.transpose(np.array([[input[0]], [input[1]], [input[2]], [input[3]]]))
+        return self.model.predict(stuff)[0][0]
+        
+    def apply_to_weights(self, old_weights):
+        new_weights = copy.deepcopy(old_weights)
+        max_layer_id = len(old_weights) - 1
+        for layer_id,layer in enumerate(old_weights):
+            max_cell_id = len(layer) - 1
+            for cell_id,cell in enumerate(layer):
+                max_weight_id = len(cell) - 1
+                for weight_id,weight in enumerate(cell):
+                    normal_layer_id = normalize_id(layer_id, max_layer_id)
+                    normal_cell_id = normalize_id(cell_id, max_cell_id)
+                    normal_weight_id = normalize_id(weight_id, max_weight_id)
+                    new_weight = self.apply(weight, normal_layer_id, normal_cell_id, normal_weight_id)
+                    new_weights[layer_id][cell_id][weight_id] = new_weight
+                    if self.params.get("print_all_weight_updates", False):
+                        print("updated old weight " + str(weight) + "\t @ (" + str(layer_id) + "," + str(cell_id) + "," + str(weight_id) + ") to new value " + str(new_weight) + "\t calling @ (" + str(normal_layer_id) + "," + str(normal_cell_id) + "," + str(normal_weight_id) + ")")
+        return new_weights
+
+   
+
+
 if __name__ == '__main__':
     with Experiment() as exp:
         counts = dict(divergent=0, fix_zero=0, fix_other=0, other=0)
-        for run_id in tqdm(range(10000)):
+        for run_id in tqdm(range(10)):
             activation = 'linear'
             net = WeightwiseNeuralNetwork(2, 2, activation='linear')
             # net.set_params(print_all_weight_updates=True)
@@ -189,9 +166,9 @@ if __name__ == '__main__':
                     counts['fix_zero'] += 1
                 else:
                     counts['fix_other'] += 1
-                    net.print_weights()
+                    exp.log(net.repr_weights())
                     net.self_attack()
-                    net.print_weights()
+                    exp.log(net.repr_weights())
             else:
                 counts['other'] += 1
-        print(counts) 
+        exp.log(counts) 
