@@ -76,3 +76,7 @@ class FixpointExperiment(Experiment):
             self.counters['fix_sec'] += 1
         else:
             self.counters['other'] += 1
+            
+            
+class SoupExperiment(Experiment):
+    pass

@@ -92,6 +92,14 @@ class NeuralNetwork:
             self.attack(self)
         return self
     
+    def meet(self, other_network):
+        new_other_network = copy.deepcopy(other_network)
+        return self.attack(new_other_network)
+        
+    def self_meet(self, iterations=1):
+        new_me = copy.deepcopy(self)
+        return new_me.self_attack(iterations)
+    
     def is_diverged(self):
         return are_weights_diverged(self.get_weights())
         
@@ -300,13 +308,12 @@ class RecurrentNeuralNetwork(NeuralNetwork):
                     
 
 if __name__ == '__main__':
-    if True:
-        with FixpointExperiment() as exp:
-            for run_id in tqdm(range(100)):
-                # net = WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear')
-                net = AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='linear').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random, print_all_weight_updates=False)
-                # net = RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params(print_all_weight_updates=True)
-                # net.print_weights()
-                exp.run_net(net, 100)
-            exp.log(exp.counters)
+    with FixpointExperiment() as exp:
+        for run_id in tqdm(range(100)):
+            # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
+            net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation='linear').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random, print_all_weight_updates=False)
+            # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear').with_params(print_all_weight_updates=True)
+            # net.print_weights()
+            exp.run_net(net, 100)
+        exp.log(exp.counters)
             
