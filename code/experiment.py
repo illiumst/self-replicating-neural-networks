@@ -47,3 +47,32 @@ class Experiment:
         for name,value in kwargs.items():
             with open(self.dir + "/" + str(name) + ".dill", "wb") as dill_file:
                 dill.dump(value, dill_file)
+
+
+class FixpointExperiment(Experiment):
+    
+    def initialize_more(self):
+        self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
+        self.interesting_fixpoints = []
+    def run_net(self, net, step_limit=100):
+        i = 0
+        while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
+            net.self_attack()
+            i += 1
+        self.count(net)
+    def count(self, net):
+        if net.is_diverged():
+            self.counters['divergent'] += 1
+        elif net.is_fixpoint():
+            if net.is_zero():
+                self.counters['fix_zero'] += 1
+            else:
+                self.counters['fix_other'] += 1
+                self.interesting_fixpoints.append(net)
+                self.log(net.repr_weights())
+                net.self_attack()
+                self.log(net.repr_weights())
+        elif net.is_fixpoint(2):
+            self.counters['fix_sec'] += 1
+        else:
+            self.counters['other'] += 1

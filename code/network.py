@@ -8,7 +8,7 @@ from keras.layers import SimpleRNN, Dense
 from keras.layers import Input, TimeDistributed
 from tqdm import tqdm
 
-from experiment import Experiment
+from experiment import FixpointExperiment
 
 
 def normalize_id(value, norm):
@@ -35,6 +35,8 @@ def are_weights_within(network_weights, lower_bound, upper_bound):
                     return False
     return True
 
+
+
 class NeuralNetwork:
 
     @staticmethod 
@@ -49,12 +51,10 @@ class NeuralNetwork:
             s += "\n"
         return s
     
-    def __init__(self, width, depth, **keras_params):
-        self.width = width
-        self.depth = depth
+    def __init__(self, **params):
         self.params = dict(epsilon=0.00000000000001)
+        self.params.update(params)
         self.keras_params = dict(activation='linear', use_bias=False)
-        self.keras_params.update(keras_params)
         self.silent = True
     
     def silence(self):
@@ -127,7 +127,9 @@ class NeuralNetwork:
 class WeightwiseNeuralNetwork(NeuralNetwork):
     
     def __init__(self, width, depth, **kwargs):
-        super().__init__(width, depth, **kwargs)
+        super().__init__(**kwargs)
+        self.width = width
+        self.depth = depth
         self.model = Sequential()
         self.model.add(Dense(units=width, input_dim=4, **self.keras_params))
         for _ in range(depth-1):
@@ -156,7 +158,6 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
         return new_weights
 
 
-
 class AggregatingNeuralNetwork(NeuralNetwork):
     
     @staticmethod
@@ -173,7 +174,9 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         return [aggregate for _ in range(amount)]
     
     def __init__(self, aggregates, width, depth, **kwargs):
-        super().__init__(width, depth, **kwargs)
+        super().__init__(**kwargs)
+        self.width = width
+        self.depth = depth
         self.aggregates = aggregates
         self.aggregator = self.params.get('aggregator', self.__class__.aggregate_average)
         self.deaggregator = self.params.get('deaggregator', self.__class__.deaggregate_identically)
@@ -239,41 +242,53 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         return new_weights                
 
 
-class FixpointExperiment(Experiment):
+
+class RecurrentNeuralNetwork(NeuralNetwork):
     
-    def initialize_more(self):
-        self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
-        self.interesting_fixpoints = []
-    def run_net(self, net, step_limit=100):
-        i = 0
-        while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
-            net.self_attack()
-            i += 1
-        self.count(net)
-    def count(self, net):
-        if net.is_diverged():
-            self.counters['divergent'] += 1
-        elif net.is_fixpoint():
-            if net.is_zero():
-                self.counters['fix_zero'] += 1
-            else:
-                self.counters['fix_other'] += 1
-                self.interesting_fixpoints.append(net)
-                self.log(net.repr_weights())
-                net.self_attack()
-                self.log(net.repr_weights())
-        elif net.is_fixpoint(2):
-            self.counters['fix_sec'] += 1
-        else:
-            self.counters['other'] += 1
+    def __init__(self, width, depth, **kwargs):
+        super().__init__(**kwargs)
+        self.features = 1
+        self.width = width
+        self.depth = depth
+        self.model = Sequential()
+        self.model.add(SimpleRNN(units=width, input_dim=self.features, return_sequences=True, **self.keras_params))
+        for _ in range(depth-1):
+            self.model.add(SimpleRNN(units=width, return_sequences=True, **self.keras_params))
+        self.model.add(SimpleRNN(units=self.features, return_sequences=True, **self.keras_params))
+    
+    def apply(self, *input):
+        stuff = np.transpose(np.array([[[input[i]] for i in range(len(input))]]))
+        return self.model.predict(stuff)[0].flatten()
+        
+    def apply_to_weights(self, old_weights):
+        # build list from old weights
+        new_weights = copy.deepcopy(old_weights)
+        old_weights_list = []
+        for layer_id,layer in enumerate(old_weights):
+            for cell_id,cell in enumerate(layer):
+                for weight_id,weight in enumerate(cell):
+                    old_weights_list += [weight]
+        # call network
+        new_weights_list = self.apply(*old_weights_list)
+        # write back new weights from list of rnn returns
+        current_weight_id = 0
+        for layer_id,layer in enumerate(new_weights):
+            for cell_id,cell in enumerate(layer):
+                for weight_id,weight in enumerate(cell):
+                    new_weight = new_weights_list[current_weight_id]
+                    new_weights[layer_id][cell_id][weight_id] = new_weight
+                    current_weight_id += 1
+        return new_weights
+                    
 
 if __name__ == '__main__':
-
-    with FixpointExperiment() as exp:
-        for run_id in tqdm(range(100)):
-            # net = WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear')
-            net = AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='linear').with_params(print_all_weight_updates=False)
-            exp.run_net(net, 100)
-            # net.print_weights()
-        exp.log(exp.counters)
+    if True:
+        with FixpointExperiment() as exp:
+            for run_id in tqdm(range(100)):
+                # net = WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear')
+                # net = AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='linear').with_params(print_all_weight_updates=False)
+                net = RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params(print_all_weight_updates=True)
+                # net.print_weights()
+                exp.run_net(net, 100)
+            exp.log(exp.counters)
             
