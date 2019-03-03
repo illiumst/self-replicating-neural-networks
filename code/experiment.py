@@ -18,6 +18,10 @@ class Experiment:
         self.base_dir = os.path.realpath((os.path.dirname(this_file) + "/..")) + "/"
         self.next_iteration = 0
         self.log_messages = []
+        self.initialize_more()
+        
+    def initialize_more(self):
+        pass
     
     def __enter__(self):
         self.dir = self.base_dir + "experiments/exp-" + str(self.experiment_name) + "-" + str(self.experiment_id) + "-" + str(self.next_iteration) + "/"

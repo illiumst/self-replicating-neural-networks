@@ -35,9 +35,19 @@ def are_weights_within(network_weights, lower_bound, upper_bound):
                     return False
     return True
 
-
-
 class NeuralNetwork:
+
+    @staticmethod 
+    def weights_to_string(weights):
+        s = ""
+        for layer_id,layer in enumerate(weights):
+            for cell_id,cell in enumerate(layer):
+                s += "[ "
+                for weight_id,weight in enumerate(cell):
+                    s += str(weight) + " "
+                s += "]"
+            s += "\n"
+        return s
     
     def __init__(self, width, depth, **keras_params):
         self.width = width
@@ -45,12 +55,23 @@ class NeuralNetwork:
         self.params = dict(epsilon=0.00000000000001)
         self.keras_params = dict(activation='linear', use_bias=False)
         self.keras_params.update(keras_params)
+        self.silent = True
     
-    def set_params(self, **kwargs):
+    def silence(self):
+        self.silent = True
+        return self
+    
+    def unsilence(self):
+        self.silent = False
+        return self
+    
+    def with_params(self, **kwargs):
         self.params.update(kwargs)
+        return self
         
-    def set_keras_params(self, **kwargs):
-        self.keras_param.update(kwargs)
+    def with_keras_params(self, **kwargs):
+        self.keras_params.update(kwargs)
+        return self
     
     def get_weights(self):
         return self.model.get_weights()
@@ -78,10 +99,13 @@ class NeuralNetwork:
         epsilon = epsilon or self.params.get('epsilon')
         return are_weights_within(self.get_weights(), -epsilon, epsilon)
 
-    def is_fixpoint(self, epsilon=None):
+    def is_fixpoint(self, degree=1, epsilon=None):
         epsilon = epsilon or self.params.get('epsilon')
         old_weights = self.get_weights()
-        new_weights = self.apply_to_network(self)
+        self.silence()
+        for _ in range(degree):
+            new_weights = self.apply_to_network(self)
+        self.unsilence()
         if are_weights_diverged(new_weights):
             return False
         for layer_id,layer in enumerate(old_weights):
@@ -93,15 +117,7 @@ class NeuralNetwork:
         return True
     
     def repr_weights(self):
-        s = ""
-        for layer_id,layer in enumerate(self.get_weights()):
-            for cell_id,cell in enumerate(layer):
-                s += "[ "
-                for weight_id,weight in enumerate(cell):
-                    s += str(weight) + " "
-                s += "]"
-            s += "\n"
-        return s
+        return self.__class__.weights_to_string(self.get_weights())
     
     def print_weights(self):
         print(self.repr_weights())
@@ -110,8 +126,8 @@ class NeuralNetwork:
 
 class WeightwiseNeuralNetwork(NeuralNetwork):
     
-    def __init__(self, width, depth, **keras_params):
-        super().__init__(width, depth, **keras_params)
+    def __init__(self, width, depth, **kwargs):
+        super().__init__(width, depth, **kwargs)
         self.model = Sequential()
         self.model.add(Dense(units=width, input_dim=4, **self.keras_params))
         for _ in range(depth-1):
@@ -135,40 +151,129 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
                     normal_weight_id = normalize_id(weight_id, max_weight_id)
                     new_weight = self.apply(weight, normal_layer_id, normal_cell_id, normal_weight_id)
                     new_weights[layer_id][cell_id][weight_id] = new_weight
-                    if self.params.get("print_all_weight_updates", False):
+                    if self.params.get("print_all_weight_updates", False) and not self.silent:
                         print("updated old weight " + str(weight) + "\t @ (" + str(layer_id) + "," + str(cell_id) + "," + str(weight_id) + ") to new value " + str(new_weight) + "\t calling @ (" + str(normal_layer_id) + "," + str(normal_cell_id) + "," + str(normal_weight_id) + ")")
         return new_weights
 
-   
 
+
+class AggregatingNeuralNetwork(NeuralNetwork):
+    
+    @staticmethod
+    def aggregate_average(weights):
+        total = 0
+        count = 0
+        for weight in weights:
+            total += float(weight)
+            count += 1
+        return total / float(count)
+    
+    @staticmethod
+    def deaggregate_identically(aggregate, amount):
+        return [aggregate for _ in range(amount)]
+    
+    def __init__(self, aggregates, width, depth, **kwargs):
+        super().__init__(width, depth, **kwargs)
+        self.aggregates = aggregates
+        self.aggregator = self.params.get('aggregator', self.__class__.aggregate_average)
+        self.deaggregator = self.params.get('deaggregator', self.__class__.deaggregate_identically)
+        self.model = Sequential()
+        self.model.add(Dense(units=width, input_dim=self.aggregates, **self.keras_params))
+        for _ in range(depth-1):
+            self.model.add(Dense(units=width, **self.keras_params))
+        self.model.add(Dense(units=self.aggregates, **self.keras_params))
+    
+    def get_amount_of_weights(self):
+        total_weights = 0
+        for layer_id,layer in enumerate(self.get_weights()):
+            for cell_id,cell in enumerate(layer):
+                for weight_id,weight in enumerate(cell):
+                    total_weights += 1
+        return total_weights
+    
+    def apply(self, *input):
+        stuff = np.transpose(np.array([[input[i]] for i in range(self.aggregates)]))
+        return self.model.predict(stuff)[0]
+        
+    def apply_to_weights(self, old_weights):
+        # build aggregations from old_weights
+        collection_size = self.get_amount_of_weights() // self.aggregates
+        collections = []
+        next_collection = []
+        current_weight_id = 0
+        for layer_id,layer in enumerate(old_weights):
+            for cell_id,cell in enumerate(layer):
+                for weight_id,weight in enumerate(cell):
+                    next_collection += [weight]
+                    if (current_weight_id + 1) % collection_size == 0:
+                        collections += [next_collection]
+                        next_collection = []
+                    current_weight_id += 1
+        collections[-1] += next_collection
+        leftovers = len(next_collection)
+        # call network
+        old_aggregations = [self.aggregator(collection) for collection in collections]
+        new_aggregations = self.apply(*old_aggregations)
+        # generate list of new weights
+        new_weights_list = []
+        for aggregation_id,aggregation in enumerate(new_aggregations):
+            if aggregation_id == self.aggregates - 1:
+                new_weights_list += self.deaggregator(aggregation, collection_size + leftovers)
+            else:
+                new_weights_list += self.deaggregator(aggregation, collection_size)
+        # write back new weights
+        new_weights = copy.deepcopy(old_weights)
+        current_weight_id = 0
+        for layer_id,layer in enumerate(new_weights):
+            for cell_id,cell in enumerate(layer):
+                for weight_id,weight in enumerate(cell):
+                    new_weight = new_weights_list[current_weight_id]
+                    new_weights[layer_id][cell_id][weight_id] = new_weight
+                    current_weight_id += 1
+        # return results
+        if self.params.get("print_all_weight_updates", False) and not self.silent:
+            print("updated old weight aggregations " + str(old_aggregations))
+            print("to new weight aggregations      " + str(new_aggregations))
+            print("resulting in network weights ...")
+            print(self.__class__.weights_to_string(new_weights))
+        return new_weights                
+
+
+class FixpointExperiment(Experiment):
+    
+    def initialize_more(self):
+        self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
+        self.interesting_fixpoints = []
+    def run_net(self, net, step_limit=100):
+        i = 0
+        while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
+            net.self_attack()
+            i += 1
+        self.count(net)
+    def count(self, net):
+        if net.is_diverged():
+            self.counters['divergent'] += 1
+        elif net.is_fixpoint():
+            if net.is_zero():
+                self.counters['fix_zero'] += 1
+            else:
+                self.counters['fix_other'] += 1
+                self.interesting_fixpoints.append(net)
+                self.log(net.repr_weights())
+                net.self_attack()
+                self.log(net.repr_weights())
+        elif net.is_fixpoint(2):
+            self.counters['fix_sec'] += 1
+        else:
+            self.counters['other'] += 1
 
 if __name__ == '__main__':
-    with Experiment() as exp:
-        counts = dict(divergent=0, fix_zero=0, fix_other=0, other=0)
-        for run_id in tqdm(range(10)):
-            activation = 'linear'
-            net = WeightwiseNeuralNetwork(2, 2, activation='linear')
-            # net.set_params(print_all_weight_updates=True)
-            # net.model.summary()
+
+    with FixpointExperiment() as exp:
+        for run_id in tqdm(range(100)):
+            # net = WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear')
+            net = AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='linear').with_params(print_all_weight_updates=False)
+            exp.run_net(net, 100)
             # net.print_weights()
-            # print()
-            # print(net.apply(1, 1, 1))
-            i = 0
-            while i < 100 and not net.is_diverged() and not net.is_fixpoint():
-                net.self_attack()
-                # net.print_weights()
-                # print()
-                i += 1
-            if net.is_diverged():
-                counts['divergent'] += 1
-            elif net.is_fixpoint():
-                if net.is_zero():
-                    counts['fix_zero'] += 1
-                else:
-                    counts['fix_other'] += 1
-                    exp.log(net.repr_weights())
-                    net.self_attack()
-                    exp.log(net.repr_weights())
-            else:
-                counts['other'] += 1
-        exp.log(counts) 
+        exp.log(exp.counters)
+            
