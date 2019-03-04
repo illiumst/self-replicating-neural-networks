@@ -1,8 +1,8 @@
 import sys
 import os
 import time
-import copy
 import dill
+
 
 class Experiment:
     
@@ -11,22 +11,24 @@ class Experiment:
         with open(path, "rb") as dill_file:
             return dill.load(dill_file)
     
-    def __init__(self, name=None, id=None):
-        self.experiment_id = id or time.time()
-        this_file = os.path.realpath(os.getcwd() + "/" + sys.argv[0])
-        self.experiment_name = name or os.path.basename(this_file)
-        self.base_dir = os.path.realpath((os.path.dirname(this_file) + "/..")) + "/"
+    def __init__(self, name=None, ident=None):
+        self.experiment_id = ident or time.time()
+        # TODO reapair this path
+        this_file = os.path.realpath(os.getcwd())
+        # Was wolltest du hier tun? Vorher die nummer war unsinnig.
+        self.experiment_name = name or os.path.basename(this_file).split('.')[0]
+        self.base_dir = os.path.join(os.getcwd(), self.experiment_name)
         self.next_iteration = 0
         self.log_messages = []
-        self.initialize_more()
-        
-    def initialize_more(self):
-        pass
     
     def __enter__(self):
-        self.dir = self.base_dir + "experiments/exp-" + str(self.experiment_name) + "-" + str(self.experiment_id) + "-" + str(self.next_iteration) + "/"
-        os.mkdir(self.dir)
-        print("** created " + str(self.dir))
+        self.dir = os.path.join(self.base_dir, 'experiments', 'exp-{name}-{id}-{it}'.format(
+            name=self.experiment_name, id=self.experiment_id, it=self.next_iteration)
+                                )
+        # Use makedirs for subfolder creation
+        os.makedirs(self.dir)
+        # os.mkdir(self.dir)
+        print("** created {dir} **".format(dir=self.dir))
         return self
     
     def __exit__(self, exc_type, exc_value, traceback):
@@ -39,27 +41,30 @@ class Experiment:
         print(message, **kwargs)
     
     def save_log(self, log_name="log"):
-        with open(self.dir + "/" + str(log_name) + ".txt", "w") as log_file:
+        with open(os.path.join(self.dir, "{name}.txt".format(name=log_name)), "w") as log_file:
             for log_message in self.log_messages:
                 print(str(log_message), file=log_file)
     
     def save(self, **kwargs):
-        for name,value in kwargs.items():
-            with open(self.dir + "/" + str(name) + ".dill", "wb") as dill_file:
+        for name, value in kwargs.items():
+            with open(os.path.join(self.dir, "{name}.dill".format(name=name)), "wb") as dill_file:
                 dill.dump(value, dill_file)
 
 
 class FixpointExperiment(Experiment):
     
-    def initialize_more(self):
+    def __init__(self):
+        super().__init__()
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
+
     def run_net(self, net, step_limit=100):
         i = 0
         while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
             net.self_attack()
             i += 1
         self.count(net)
+
     def count(self, net):
         if net.is_diverged():
             self.counters['divergent'] += 1

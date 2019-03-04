@@ -314,7 +314,6 @@ class RecurrentNeuralNetwork(NeuralNetwork):
         return new_weights
                     
 
-
 if __name__ == '__main__':
     with FixpointExperiment() as exp:
         for run_id in tqdm(range(100)):
@@ -324,4 +323,3 @@ if __name__ == '__main__':
             # net.print_weights()
             exp.run_net(net, 100)
         exp.log(exp.counters)
-            
