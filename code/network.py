@@ -394,6 +394,11 @@ if __name__ == '__main__':
     if True:
         with IdentLearningExperiment() as exp:
             net = LearningNeuralNetwork(width=2, depth=2, features=2, )\
-                .with_keras_params(activation='linear') \
+                .with_keras_params(activation='sigmoid', use_bias=False, ) \
                 .with_params(print_all_weight_updates=False)
-            net.learn(1000, reduction=LearningNeuralNetwork.mean_reduction)
+            net.learn(1, reduction=LearningNeuralNetwork.fft_reduction)
+            import time
+            time.sleep(1)
+            net.print_weights()
+            time.sleep(1)
+            print(net.is_fixpoint(1, epsilon=0.9e-6))

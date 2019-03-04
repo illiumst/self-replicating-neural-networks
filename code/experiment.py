@@ -13,8 +13,8 @@ class Experiment:
     
     def __init__(self, name=None, ident=None):
         self.experiment_id = ident or time.time()
-        self.experiment_name = name or 'experiment'
-        self.base_dir = os.path.join('experiments', self.experiment_name)
+        self.experiment_name = name or 'unnamed_experiment'
+        self.base_dir = self.experiment_name
         self.next_iteration = 0
         self.log_messages = []
     
@@ -81,6 +81,7 @@ class FixpointExperiment(Experiment):
             
 class SoupExperiment(Experiment):
     pass
+
 
 class IdentLearningExperiment(Experiment):
     pass
