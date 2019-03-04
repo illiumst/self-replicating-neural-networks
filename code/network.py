@@ -1,14 +1,17 @@
 import math
 import copy
 
+import os
 import numpy as np
-import tensorflow as tf
-from keras.models import Sequential, Model
+
+from keras.models import Sequential
 from keras.layers import SimpleRNN, Dense
-from keras.layers import Input, TimeDistributed
 from tqdm import tqdm
 
 from experiment import FixpointExperiment, IdentLearningExperiment
+
+# Supress warnings and info messages
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
 def normalize_id(value, norm):
@@ -19,9 +22,9 @@ def normalize_id(value, norm):
 
 
 def are_weights_diverged(network_weights):
-    for layer_id,layer in enumerate(network_weights):
-        for cell_id,cell in enumerate(layer):
-            for weight_id,weight in enumerate(cell):
+    for layer_id, layer in enumerate(network_weights):
+        for cell_id, cell in enumerate(layer):
+            for weight_id, weight in enumerate(cell):
                 if math.isnan(weight):
                     return True
                 if math.isinf(weight):
@@ -30,10 +33,10 @@ def are_weights_diverged(network_weights):
 
 
 def are_weights_within(network_weights, lower_bound, upper_bound):
-    for layer_id,layer in enumerate(network_weights):
-        for cell_id,cell in enumerate(layer):
-            for weight_id,weight in enumerate(cell):
-                if not (lower_bound <= weight and weight <= upper_bound):
+    for layer_id, layer in enumerate(network_weights):
+        for cell_id, cell in enumerate(layer):
+            for weight_id, weight in enumerate(cell):
+                if not (lower_bound <= weight <= upper_bound):
                     return False
     return True
 
@@ -43,10 +46,10 @@ class NeuralNetwork:
     @staticmethod 
     def weights_to_string(weights):
         s = ""
-        for layer_id,layer in enumerate(weights):
-            for cell_id,cell in enumerate(layer):
+        for layer_id, layer in enumerate(weights):
+            for cell_id, cell in enumerate(layer):
                 s += "[ "
-                for weight_id,weight in enumerate(cell):
+                for weight_id, weight in enumerate(cell):
                     s += str(weight) + " "
                 s += "]"
             s += "\n"
@@ -58,7 +61,6 @@ class NeuralNetwork:
         self.params.update(params)
         self.keras_params = dict(activation='linear', use_bias=False)
         self.silent = True
-        self.model = None
     
     def silence(self):
         self.silent = True
@@ -125,9 +127,9 @@ class NeuralNetwork:
         self.unsilence()
         if are_weights_diverged(new_weights):
             return False
-        for layer_id,layer in enumerate(old_weights):
+        for layer_id, layer in enumerate(old_weights):
             for cell_id, cell in enumerate(layer):
-                for weight_id,weight in enumerate(cell):
+                for weight_id, weight in enumerate(cell):
                     new_weight = new_weights[layer_id][cell_id][weight_id]
                     if abs(new_weight - weight) >= epsilon:
                         return False
@@ -151,15 +153,15 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
             self.model.add(Dense(units=self.width, **self.keras_params))
         self.model.add(Dense(units=1, **self.keras_params))
     
-    def apply(self, *input):
-        stuff = np.transpose(np.array([[input[0]], [input[1]], [input[2]], [input[3]]]))
+    def apply(self, *inputs):
+        stuff = np.transpose(np.array([[inputs[0]], [inputs[1]], [inputs[2]], [inputs[3]]]))
         return self.model.predict(stuff)[0][0]
         
     def apply_to_weights(self, old_weights):
         new_weights = copy.deepcopy(old_weights)
         max_layer_id = len(old_weights) - 1
 
-        for layer_id,layer in enumerate(old_weights):
+        for layer_id, layer in enumerate(old_weights):
             max_cell_id = len(layer) - 1
 
             for cell_id, cell in enumerate(layer):
@@ -174,7 +176,10 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
                     new_weights[layer_id][cell_id][weight_id] = new_weight
 
                     if self.params.get("print_all_weight_updates", False) and not self.silent:
-                        print("updated old weight " + str(weight) + "\t @ (" + str(layer_id) + "," + str(cell_id) + "," + str(weight_id) + ") to new value " + str(new_weight) + "\t calling @ (" + str(normal_layer_id) + "," + str(normal_cell_id) + "," + str(normal_weight_id) + ")")
+                        print("updated old weight {weight}\t @ ({layer},{cell},{weight_id}) "
+                              "to new value {new_weight}\t calling @ ({n_layer},{n_cell},{n_weight_id})").format(
+                            weight=weight, layer=layer_id, cell=cell_id, weight_id=weight_id, new_weight=new_weight,
+                            n_layer=normal_layer_id, n_cell=normal_cell_id, n_weight_id=normal_weight_id)
         return new_weights
 
 
@@ -231,14 +236,14 @@ class AggregatingNeuralNetwork(NeuralNetwork):
     
     def get_amount_of_weights(self):
         total_weights = 0
-        for layer_id,layer in enumerate(self.get_weights()):
-            for cell_id,cell in enumerate(layer):
-                for weight_id,weight in enumerate(cell):
+        for layer_id, layer in enumerate(self.get_weights()):
+            for cell_id, cell in enumerate(layer):
+                for weight_id, weight in enumerate(cell):
                     total_weights += 1
         return total_weights
     
-    def apply(self, *input):
-        stuff = np.transpose(np.array([[input[i]] for i in range(self.aggregates)]))
+    def apply(self, *inputs):
+        stuff = np.transpose(np.array([[inputs[i]] for i in range(self.aggregates)]))
         return self.model.predict(stuff)[0]
         
     def apply_to_weights(self, old_weights):
@@ -247,9 +252,9 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         collections = []
         next_collection = []
         current_weight_id = 0
-        for layer_id,layer in enumerate(old_weights):
-            for cell_id,cell in enumerate(layer):
-                for weight_id,weight in enumerate(cell):
+        for layer_id, layer in enumerate(old_weights):
+            for cell_id, cell in enumerate(layer):
+                for weight_id, weight in enumerate(cell):
                     next_collection += [weight]
                     if (current_weight_id + 1) % collection_size == 0:
                         collections += [next_collection]
@@ -262,7 +267,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         new_aggregations = self.apply(*old_aggregations)
         # generate list of new weights
         new_weights_list = []
-        for aggregation_id,aggregation in enumerate(new_aggregations):
+        for aggregation_id, aggregation in enumerate(new_aggregations):
             if aggregation_id == self.aggregates - 1:
                 new_weights_list += self.get_deaggregator()(aggregation, collection_size + leftovers)
             else:
@@ -271,9 +276,9 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         # write back new weights
         new_weights = copy.deepcopy(old_weights)
         current_weight_id = 0
-        for layer_id,layer in enumerate(new_weights):
-            for cell_id,cell in enumerate(layer):
-                for weight_id,weight in enumerate(cell):
+        for layer_id, layer in enumerate(new_weights):
+            for cell_id, cell in enumerate(layer):
+                for weight_id, weight in enumerate(cell):
                     new_weight = new_weights_list[current_weight_id]
                     new_weights[layer_id][cell_id][weight_id] = new_weight
                     current_weight_id += 1
@@ -298,25 +303,25 @@ class RecurrentNeuralNetwork(NeuralNetwork):
             self.model.add(SimpleRNN(units=width, return_sequences=True, **self.keras_params))
         self.model.add(SimpleRNN(units=self.features, return_sequences=True, **self.keras_params))
     
-    def apply(self, *input):
-        stuff = np.transpose(np.array([[[input[i]] for i in range(len(input))]]))
+    def apply(self, *inputs):
+        stuff = np.transpose(np.array([[[inputs[i]] for i in range(len(inputs))]]))
         return self.model.predict(stuff)[0].flatten()
         
     def apply_to_weights(self, old_weights):
         # build list from old weights
         new_weights = copy.deepcopy(old_weights)
         old_weights_list = []
-        for layer_id,layer in enumerate(old_weights):
-            for cell_id,cell in enumerate(layer):
-                for weight_id,weight in enumerate(cell):
+        for layer_id, layer in enumerate(old_weights):
+            for cell_id, cell in enumerate(layer):
+                for weight_id, weight in enumerate(cell):
                     old_weights_list += [weight]
         # call network
         new_weights_list = self.apply(*old_weights_list)
         # write back new weights from list of rnn returns
         current_weight_id = 0
-        for layer_id,layer in enumerate(new_weights):
-            for cell_id,cell in enumerate(layer):
-                for weight_id,weight in enumerate(cell):
+        for layer_id, layer in enumerate(new_weights):
+            for cell_id, cell in enumerate(layer):
+                for weight_id, weight in enumerate(cell):
                     new_weight = new_weights_list[current_weight_id]
                     new_weights[layer_id][cell_id][weight_id] = new_weight
                     current_weight_id += 1
@@ -329,7 +334,7 @@ class LearningNeuralNetwork(NeuralNetwork):
     def mean_reduction(weights, features):
         single_dim_weights = np.hstack([w.flatten() for w in weights])
         shaped_weights = np.reshape(single_dim_weights, (1, features, -1))
-        x = np.mean(shaped_weights, axis=1)
+        x = np.mean(shaped_weights, axis=-1)
         return x
 
     @staticmethod
@@ -339,16 +344,15 @@ class LearningNeuralNetwork(NeuralNetwork):
         return x
 
     @staticmethod
-    def random_reduction(weights, features):
+    def random_reduction(_, features):
         x = np.random.rand(features)[None, ...]
         return x
 
-    def __init__(self, width, depth, features, reduction, **kwargs):
+    def __init__(self, width, depth, features, **kwargs):
         super().__init__(**kwargs)
         self.width = width
         self.depth = depth
         self.features = features
-        self.reduction = reduction
         self.compile_params = dict(loss='mse', optimizer='sgd')
         self.model.add(Dense(units=self.width, input_dim=self.features, **self.keras_params))
         for _ in range(self.depth-1):
@@ -360,13 +364,13 @@ class LearningNeuralNetwork(NeuralNetwork):
         self.compile_params.update(kwargs)
         return self
 
-    def learn(self, epochs, batchsize=1):
+    def learn(self, epochs, reduction, batchsize=1):
         with tqdm(total=epochs, ascii=True,
                   desc='Type: {t} @ Epoch:'.format(t=self.__class__.__name__),
                   postfix=["Loss", dict(value=0)]) as bar:
             for epoch in range(epochs):
                 old_weights = self.get_weights()
-                x = self.reduction(old_weights)
+                x = reduction(old_weights, self.features)
                 history = self.model.fit(x=x, y=x, verbose=0, batch_size=batchsize)
                 bar.postfix[1]["value"] = history.history['loss'][-1]
                 bar.update()
@@ -377,8 +381,11 @@ if __name__ == '__main__':
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(100)):
                 # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
-                net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation='linear').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random, print_all_weight_updates=False, use_bias=True)
-                # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear').with_params(print_all_weight_updates=True)
+                net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation='linear')\
+                    .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random,
+                                 print_all_weight_updates=False, use_bias=True)
+                # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')\
+                # .with_params(print_all_weight_updates=True)
 
                 # net.print_weights()
                 exp.run_net(net, 100)
@@ -386,8 +393,7 @@ if __name__ == '__main__':
 
     if True:
         with IdentLearningExperiment() as exp:
-            net = LearningNeuralNetwork(width=2, depth=2, features=2, reduction=LearningNeuralNetwork.random_reduction)\
+            net = LearningNeuralNetwork(width=2, depth=2, features=2, )\
                 .with_keras_params(activation='linear') \
                 .with_params(print_all_weight_updates=False)
-            net.learn(1000)
-
+            net.learn(1000, reduction=LearningNeuralNetwork.mean_reduction)
