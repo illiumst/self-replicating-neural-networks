@@ -17,6 +17,7 @@ def normalize_id(value, norm):
     else:
         return float(value)   
 
+
 def are_weights_diverged(network_weights):
     for layer_id,layer in enumerate(network_weights):
         for cell_id,cell in enumerate(layer):
@@ -26,6 +27,7 @@ def are_weights_diverged(network_weights):
                 if math.isinf(weight):
                     return True
     return False
+
 
 def are_weights_within(network_weights, lower_bound, upper_bound):
     for layer_id,layer in enumerate(network_weights):
@@ -324,21 +326,30 @@ class RecurrentNeuralNetwork(NeuralNetwork):
 class LearningNeuralNetwork(NeuralNetwork):
 
     @staticmethod
-    def _apply_mean_reduction(self):
-        return
+    def mean_reduction(weights, features):
+        single_dim_weights = np.hstack([w.flatten() for w in weights])
+        shaped_weights = np.reshape(single_dim_weights, (1, features, -1))
+        x = np.mean(shaped_weights, axis=1)
+        return x
 
     @staticmethod
-    def _apply_fft_reduction(self):
-        return
+    def fft_reduction(weights, features):
+        single_dim_weights = np.hstack([w.flatten() for w in weights])
+        x = np.fft.fft(single_dim_weights, n=features)[None, ...]
+        return x
 
-    def __init__(self, width, depth, features, mode='fft', **kwargs):
+    @staticmethod
+    def random_reduction(weights, features):
+        x = np.random.rand(features)[None, ...]
+        return x
+
+    def __init__(self, width, depth, features, reduction, **kwargs):
         super().__init__(**kwargs)
         self.width = width
         self.depth = depth
         self.features = features
+        self.reduction = reduction
         self.compile_params = dict(loss='mse', optimizer='sgd')
-        self.apply_reduction = self._apply_fft_reduction if mode.lower()=='fft' else self._apply_mean_reduction
-        self.model = Sequential()
         self.model.add(Dense(units=self.width, input_dim=self.features, **self.keras_params))
         for _ in range(self.depth-1):
             self.model.add(Dense(units=self.width, **self.keras_params))
@@ -355,13 +366,10 @@ class LearningNeuralNetwork(NeuralNetwork):
                   postfix=["Loss", dict(value=0)]) as bar:
             for epoch in range(epochs):
                 old_weights = self.get_weights()
-                single_dim_weights = np.hstack([w.flatten() for w in old_weights])
-                x = np.fft.fft(single_dim_weights, n=self.features)
-                history = self.model.fit(x=x, y=x)
-                bar.postfix[1]["value"] = history
+                x = self.reduction(old_weights)
+                history = self.model.fit(x=x, y=x, verbose=0, batch_size=batchsize)
+                bar.postfix[1]["value"] = history.history['loss'][-1]
                 bar.update()
-
-
 
 
 if __name__ == '__main__':
@@ -378,8 +386,8 @@ if __name__ == '__main__':
 
     if True:
         with IdentLearningExperiment() as exp:
-            net = LearningNeuralNetwork(width=2, depth=2, features=2) \
+            net = LearningNeuralNetwork(width=2, depth=2, features=2, reduction=LearningNeuralNetwork.random_reduction)\
                 .with_keras_params(activation='linear') \
                 .with_params(print_all_weight_updates=False)
-            net.learn(100)
+            net.learn(1000)
 
