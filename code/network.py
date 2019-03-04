@@ -178,6 +178,13 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         return total / float(count)
     
     @staticmethod
+    def aggregate_max(weights):
+        max_found = weights[0]
+        for weight in weights:
+            max_found = weight > max_found and weight or max_found
+        return max_found
+    
+    @staticmethod
     def deaggregate_identically(aggregate, amount):
         return [aggregate for _ in range(amount)]
     
@@ -307,11 +314,12 @@ class RecurrentNeuralNetwork(NeuralNetwork):
         return new_weights
                     
 
+
 if __name__ == '__main__':
     with FixpointExperiment() as exp:
         for run_id in tqdm(range(100)):
             # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
-            net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation='linear').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random, print_all_weight_updates=False)
+            net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation='linear').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random, print_all_weight_updates=False, use_bias=True)
             # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear').with_params(print_all_weight_updates=True)
             # net.print_weights()
             exp.run_net(net, 100)

@@ -33,6 +33,11 @@ class Soup:
                     other_particle_id = int(prng() * len(self.particles))
                     other_particle = self.particles[other_particle_id]
                     particle.attack(other_particle)
+                if self.params.get('remove_divergent') and particle.is_diverged():
+                    self.particles[particle_id] = self.generator()
+                if self.params.get('remove_zero') and particle.is_zero():
+                    self.particles[particle_id] = self.generator()
+
     
     def count(self):
         counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
@@ -53,9 +58,12 @@ class Soup:
 
 if __name__ == '__main__':
     with SoupExperiment() as exp:
-        for run_id in tqdm(range(1)):
-            net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='linear').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
-            soup = Soup(100, net_generator)
+        for run_id in range(1):
+            net_generator = lambda: WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='sigmoid').with_params()
+            # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid').with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
+            # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+            soup = Soup(100, net_generator).with_params(remove_divergent=True, remove_zero=True)
             soup.seed()
-            soup.evolve(100)
+            for _ in tqdm(range(100)):
+                soup.evolve()
             exp.log(soup.count())
