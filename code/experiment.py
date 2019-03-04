@@ -13,11 +13,8 @@ class Experiment:
     
     def __init__(self, name=None, ident=None):
         self.experiment_id = ident or time.time()
-        # TODO reapair this path
-        this_file = os.path.realpath(os.getcwd())
-        # Was wolltest du hier tun? Vorher die nummer war unsinnig.
-        self.experiment_name = name or os.path.basename(this_file).split('.')[0]
-        self.base_dir = os.path.join(os.getcwd(), self.experiment_name)
+        self.experiment_name = name or 'experiment'
+        self.base_dir = os.path.join('experiments', self.experiment_name)
         self.next_iteration = 0
         self.log_messages = []
     
@@ -25,9 +22,8 @@ class Experiment:
         self.dir = os.path.join(self.base_dir, 'experiments', 'exp-{name}-{id}-{it}'.format(
             name=self.experiment_name, id=self.experiment_id, it=self.next_iteration)
                                 )
-        # Use makedirs for subfolder creation
+
         os.makedirs(self.dir)
-        # os.mkdir(self.dir)
         print("** created {dir} **".format(dir=self.dir))
         return self
     
@@ -54,7 +50,7 @@ class Experiment:
 class FixpointExperiment(Experiment):
     
     def __init__(self):
-        super().__init__()
+        super().__init__(name=self.__class__.__name__)
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
 
@@ -84,4 +80,7 @@ class FixpointExperiment(Experiment):
             
             
 class SoupExperiment(Experiment):
+    pass
+
+class IdentLearningExperiment(Experiment):
     pass

@@ -23,6 +23,7 @@ if __name__ == '__main__':
         net.self_attack(100)
         print(net.get_weights())
         print(net.is_fixpoint())
+
     if True:
         net.set_weights(vary(0.01, 0.0))
         print(net.get_weights())
