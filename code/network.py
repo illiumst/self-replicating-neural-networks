@@ -623,14 +623,14 @@ if __name__ == '__main__':
                 .with_keras_params(activation='sigmoid', use_bias=False, ) \
                 .with_params(print_all_weight_updates=False)
             net.print_weights()
-            time.sleep(1)
+            time.sleep(0.1)
             print(net.is_fixpoint(epsilon=0.1e-6))
             print()
             net.learn(1, reduction=LearningNeuralNetwork.fft_reduction)
             import time
-            time.sleep(1)
+            time.sleep(0.1)
             net.print_weights()
-            time.sleep(1)
+            time.sleep(0.1)
             print(net.is_fixpoint(epsilon=0.1e-6))
     if False:
         # ok so this works quite realiably
