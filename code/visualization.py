@@ -114,7 +114,6 @@ def compile_run_name(path: str) -> dict:
 
 
 if __name__ == '__main__':
-    raise NotImplementedError()
     args = build_args()
     in_file = args.in_file[0]
     out_file = args.out_file

@@ -1,9 +1,8 @@
 import math
 import copy
-import os
 import numpy as np
-
 from tqdm import tqdm
+
 from keras.models import Sequential
 from keras.layers import SimpleRNN, Dense
 
@@ -16,7 +15,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 class NeuralNetwork(PrintingObject):
 
-    @staticmethod 
+    @staticmethod
     def weights_to_string(weights):
         s = ""
         for layer_id, layer in enumerate(weights):
@@ -27,8 +26,8 @@ class NeuralNetwork(PrintingObject):
                 s += "]"
             s += "\n"
         return s
-    
-    @staticmethod    
+
+    @staticmethod
     def are_weights_diverged(network_weights):
         for layer_id, layer in enumerate(network_weights):
             for cell_id, cell in enumerate(layer):
@@ -39,15 +38,15 @@ class NeuralNetwork(PrintingObject):
                         return True
         return False
 
-    @staticmethod 
+    @staticmethod
     def are_weights_within(network_weights, lower_bound, upper_bound):
         for layer_id, layer in enumerate(network_weights):
             for cell_id, cell in enumerate(layer):
                 for weight_id, weight in enumerate(cell):
-                    if not (lower_bound <= weight <= upper_bound):
+                    if not (lower_bound <= weight and weight <= upper_bound):
                         return False
         return True
-        
+
     @staticmethod
     def fill_weights(old_weights, new_weights_list):
         new_weights = copy.deepcopy(old_weights)
@@ -59,7 +58,7 @@ class NeuralNetwork(PrintingObject):
                     new_weights[layer_id][cell_id][weight_id] = new_weight
                     current_weight_id += 1
         return new_weights
-    
+
     def __init__(self, **params):
         super().__init__()
         self.model = Sequential()
@@ -69,54 +68,54 @@ class NeuralNetwork(PrintingObject):
 
     def get_params(self):
         return self.params
-    
+
     def get_keras_params(self):
         return self.keras_params
 
     def with_params(self, **kwargs):
         self.params.update(kwargs)
         return self
-        
+
     def with_keras_params(self, **kwargs):
         self.keras_params.update(kwargs)
         return self
-        
+
     def get_model(self):
         return self.model
-    
+
     def get_weights(self):
         return self.get_model().get_weights()
-        
+
     def set_weights(self, new_weights):
         return self.get_model().set_weights(new_weights)
 
     def apply_to_weights(self, old_weights):
-        raise NotImplementedException
+        raise NotImplementedError
 
     def apply_to_network(self, other_network):
         new_weights = self.apply_to_weights(other_network.get_weights())
         return new_weights
-        
+
     def attack(self, other_network):
         other_network.set_weights(self.apply_to_network(other_network))
         return self
-        
+
+    def fuck(self, other_network):
+        self.set_weights(self.apply_to_network(other_network))
+        return self
+
     def self_attack(self, iterations=1):
         for _ in range(iterations):
             self.attack(self)
         return self
-    
+
     def meet(self, other_network):
         new_other_network = copy.deepcopy(other_network)
         return self.attack(new_other_network)
-        
-    def self_meet(self, iterations=1):
-        new_me = copy.deepcopy(self)
-        return new_me.self_attack(iterations)
-    
+
     def is_diverged(self):
         return NeuralNetwork.are_weights_diverged(self.get_weights())
-        
+
     def is_zero(self, epsilon=None):
         epsilon = epsilon or self.params.get('epsilon')
         return NeuralNetwork.are_weights_within(self.get_weights(), -epsilon, epsilon)
@@ -126,10 +125,10 @@ class NeuralNetwork(PrintingObject):
         epsilon = epsilon or self.get_params().get('epsilon')
         old_weights = self.get_weights()
         new_weights = copy.deepcopy(old_weights)
-        
+
         for _ in range(degree):
             new_weights = self.apply_to_weights(new_weights)
-                
+
         if NeuralNetwork.are_weights_diverged(new_weights):
             return False
         for layer_id, layer in enumerate(old_weights):
@@ -139,23 +138,23 @@ class NeuralNetwork(PrintingObject):
                     if abs(new_weight - weight) >= epsilon:
                         return False
         return True
-    
+
     def repr_weights(self):
         return self.__class__.weights_to_string(self.get_weights())
-    
+
     def print_weights(self):
         print(self.repr_weights())
 
 
 class WeightwiseNeuralNetwork(NeuralNetwork):
-    
+
     @staticmethod
     def normalize_id(value, norm):
         if norm > 1:
             return float(value) / float(norm)
         else:
             return float(value)
-    
+
     def __init__(self, width, depth, **kwargs):
         super().__init__(**kwargs)
         self.width = width
@@ -164,11 +163,11 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
         for _ in range(self.depth-1):
             self.model.add(Dense(units=self.width, **self.keras_params))
         self.model.add(Dense(units=1, **self.keras_params))
-    
+
     def apply(self, *inputs):
         stuff = np.transpose(np.array([[inputs[0]], [inputs[1]], [inputs[2]], [inputs[3]]]))
         return self.model.predict(stuff)[0][0]
-    
+
     @classmethod
     def compute_all_duplex_weight_points(cls, old_weights):
         points = []
@@ -182,26 +181,25 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
                     normal_layer_id = cls.normalize_id(layer_id, max_layer_id)
                     normal_cell_id = cls.normalize_id(cell_id, max_cell_id)
                     normal_weight_id = cls.normalize_id(weight_id, max_weight_id)
-                    
+
                     points += [[weight, layer_id, cell_id, weight_id]]
                     normal_points += [[weight, normal_layer_id, normal_cell_id, normal_weight_id]]
         return points, normal_points
-    
+
     @classmethod
     def compute_all_weight_points(cls, all_weights):
         return cls.compute_all_duplex_weight_points(all_weights)[0]
-    
+
     @classmethod
     def compute_all_normal_weight_points(cls, all_weights):
         return cls.compute_all_duplex_weight_points(all_weights)[1]
-        
-    
+
     def apply_to_weights(self, old_weights):
         new_weights = copy.deepcopy(self.get_weights())
         for (weight_point, normal_weight_point) in zip(*self.__class__.compute_all_duplex_weight_points(old_weights)):
             weight, layer_id, cell_id, weight_id = weight_point
             _, normal_layer_id, normal_cell_id, normal_weight_id = normal_weight_point
-            
+
             new_weight = self.apply(*normal_weight_point)
             new_weights[layer_id][cell_id][weight_id] = new_weight
 
@@ -209,23 +207,22 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
                 print("updated old weight {weight}\t @ ({layer},{cell},{weight_id}) "
                       "to new value {new_weight}\t calling @ ({normal_layer},{normal_cell},{normal_weight_id})").format(
                     weight=weight, layer=layer_id, cell=cell_id, weight_id=weight_id, new_weight=new_weight,
-                            normal_layer=normal_layer_id, normal_cell=normal_cell_id, normal_weight_id=normal_weight_id)
+                    normal_layer=normal_layer_id, normal_cell=normal_cell_id, normal_weight_id=normal_weight_id)
         return new_weights
-        
+
     def compute_samples(self):
         samples = []
         for normal_weight_point in self.__class__.compute_all_normal_weight_points(self.get_weights()):
             weight, normal_layer_id, normal_cell_id, normal_weight_id = normal_weight_point
-            
+
             sample = np.transpose(np.array([[weight], [normal_layer_id], [normal_cell_id], [normal_weight_id]]))
             samples += [sample[0]]
         samples_array = np.asarray(samples)
-        return samples_array, samples_array[:, 0] 
-        
+        return samples_array, samples_array[:, 0]
 
 
 class AggregatingNeuralNetwork(NeuralNetwork):
-    
+
     @staticmethod
     def aggregate_average(weights):
         total = 0
@@ -234,28 +231,28 @@ class AggregatingNeuralNetwork(NeuralNetwork):
             total += float(weight)
             count += 1
         return total / float(count)
-    
+
     @staticmethod
     def aggregate_max(weights):
         max_found = weights[0]
         for weight in weights:
             max_found = weight > max_found and weight or max_found
         return max_found
-    
+
     @staticmethod
     def deaggregate_identically(aggregate, amount):
         return [aggregate for _ in range(amount)]
-    
+
     @staticmethod
     def shuffle_not(weights_list):
         return weights_list
-    
+
     @staticmethod
     def shuffle_random(weights_list):
         import random
         random.shuffle(weights_list)
         return weights_list
-    
+
     def __init__(self, aggregates, width, depth, **kwargs):
         super().__init__(**kwargs)
         self.aggregates = aggregates
@@ -265,16 +262,16 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         for _ in range(depth-1):
             self.model.add(Dense(units=width, **self.keras_params))
         self.model.add(Dense(units=self.aggregates, **self.keras_params))
-    
+
     def get_aggregator(self):
         return self.params.get('aggregator', self.__class__.aggregate_average)
-        
+
     def get_deaggregator(self):
         return self.params.get('deaggregator', self.__class__.deaggregate_identically)
-        
+
     def get_shuffler(self):
         return self.params.get('shuffler', self.__class__.shuffle_not)
-    
+
     def get_amount_of_weights(self):
         total_weights = 0
         for layer_id, layer in enumerate(self.get_weights()):
@@ -282,20 +279,20 @@ class AggregatingNeuralNetwork(NeuralNetwork):
                 for weight_id, weight in enumerate(cell):
                     total_weights += 1
         return total_weights
-    
+
     def apply(self, *inputs):
         stuff = np.transpose(np.array([[inputs[i]] for i in range(self.aggregates)]))
         return self.model.predict(stuff)[0]
-        
+
     def apply_to_weights(self, old_weights):
         # build aggregations from old_weights
         collection_size = self.get_amount_of_weights() // self.aggregates
         collections, leftovers = self.__class__.collect_weights(old_weights, collection_size)
-        
+
         # call network
         old_aggregations = [self.get_aggregator()(collection) for collection in collections]
         new_aggregations = self.apply(*old_aggregations)
-        
+
         # generate list of new weights
         new_weights_list = []
         for aggregation_id, aggregation in enumerate(new_aggregations):
@@ -304,10 +301,10 @@ class AggregatingNeuralNetwork(NeuralNetwork):
             else:
                 new_weights_list += self.get_deaggregator()(aggregation, collection_size)
         new_weights_list = self.get_shuffler()(new_weights_list)
-        
+
         # write back new weights
         new_weights = self.__class__.fill_weights(old_weights, new_weights_list)
-                    
+
         # return results
         if self.params.get("print_all_weight_updates", False) and not self.is_silent():
             print("updated old weight aggregations " + str(old_aggregations))
@@ -315,7 +312,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
             print("resulting in network weights ...")
             print(self.__class__.weights_to_string(new_weights))
         return new_weights
-        
+
     @staticmethod
     def collect_weights(all_weights, collection_size):
         collections = []
@@ -332,28 +329,28 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         collections[-1] += next_collection
         leftovers = len(next_collection)
         return collections, leftovers
-    
+
     def get_collected_weights(self):
         collection_size = self.get_amount_of_weights() // self.aggregates
         return self.__class__.collect_weights(self.get_weights(), collection_size)
-        
+
     def get_aggregated_weights(self):
         collections, leftovers = self.get_collected_weights()
         aggregations = [self.get_aggregator()(collection) for collection in collections]
         return aggregations, leftovers
-    
+
     def compute_samples(self):
         aggregations, _ = self.get_aggregated_weights()
         sample = np.transpose(np.array([[aggregations[i]] for i in range(self.aggregates)]))
         return [sample], [sample]
-        
+
     def is_fixpoint_after_aggregation(self, degree=1, epsilon=None):
         assert degree >= 1, "degree must be >= 1"
         epsilon = epsilon or self.get_params().get('epsilon')
-        
+
         old_weights = self.get_weights()
         old_aggregations, _ = self.get_aggregated_weights()
-        
+
         new_weights = copy.deepcopy(old_weights)
         for _ in range(degree):
             new_weights = self.apply_to_weights(new_weights)
@@ -362,18 +359,16 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         collection_size = self.get_amount_of_weights() // self.aggregates
         collections, leftovers = self.__class__.collect_weights(new_weights, collection_size)
         new_aggregations = [self.get_aggregator()(collection) for collection in collections]
-        
-        for aggregation_id,old_aggregation in enumerate(old_aggregations):
+
+        for aggregation_id, old_aggregation in enumerate(old_aggregations):
             new_aggregation = new_aggregations[aggregation_id]
             if abs(new_aggregation - old_aggregation) >= epsilon:
                 return False, new_aggregations
         return True, new_aggregations
 
 
-
-
 class RecurrentNeuralNetwork(NeuralNetwork):
-    
+
     def __init__(self, width, depth, **kwargs):
         super().__init__(**kwargs)
         self.features = 1
@@ -383,11 +378,11 @@ class RecurrentNeuralNetwork(NeuralNetwork):
         for _ in range(depth-1):
             self.model.add(SimpleRNN(units=width, return_sequences=True, **self.keras_params))
         self.model.add(SimpleRNN(units=self.features, return_sequences=True, **self.keras_params))
-    
+
     def apply(self, *inputs):
         stuff = np.transpose(np.array([[[inputs[i]] for i in range(len(inputs))]]))
         return self.model.predict(stuff)[0].flatten()
-        
+
     def apply_to_weights(self, old_weights):
         # build list from old weights
         new_weights = copy.deepcopy(old_weights)
@@ -396,10 +391,10 @@ class RecurrentNeuralNetwork(NeuralNetwork):
             for cell_id, cell in enumerate(layer):
                 for weight_id, weight in enumerate(cell):
                     old_weights_list += [weight]
-                    
+
         # call network
         new_weights_list = self.apply(*old_weights_list)
-        
+
         # write back new weights from list of rnn returns
         current_weight_id = 0
         for layer_id, layer in enumerate(new_weights):
@@ -409,7 +404,7 @@ class RecurrentNeuralNetwork(NeuralNetwork):
                     new_weights[layer_id][cell_id][weight_id] = new_weight
                     current_weight_id += 1
         return new_weights
-        
+
     def compute_samples(self):
         # build list from old weights
         old_weights_list = []
@@ -417,9 +412,8 @@ class RecurrentNeuralNetwork(NeuralNetwork):
             for cell_id, cell in enumerate(layer):
                 for weight_id, weight in enumerate(cell):
                     old_weights_list += [weight]
-        sample = np.transpose(np.array([[[old_weights_list[i]] for i in range(len(old_weights_list))]]))
+        sample = np.asarray(old_weights_list)[None, ..., None]
         return sample, sample
-        
 
 
 class LearningNeuralNetwork(NeuralNetwork):
@@ -455,7 +449,7 @@ class LearningNeuralNetwork(NeuralNetwork):
         self.model.compile(**self.compile_params)
 
     def apply_to_weights(self, old_weights):
-        raise NotImplementedException
+        raise NotImplementedError
 
     def with_compile_params(self, **kwargs):
         self.compile_params.update(kwargs)
@@ -473,9 +467,8 @@ class LearningNeuralNetwork(NeuralNetwork):
                 bar.update()
 
 
-
 class TrainingNeuralNetworkDecorator(NeuralNetwork):
-    
+
     def __init__(self, net, **kwargs):
         super().__init__(**kwargs)
         self.net = net
@@ -485,48 +478,54 @@ class TrainingNeuralNetworkDecorator(NeuralNetwork):
 
     def get_params(self):
         return self.net.get_params()
-    
+
     def get_keras_params(self):
         return self.net.get_keras_params()
-        
+
     def get_compile_params(self):
         return self.net.get_compile_params()
-    
+
     def with_params(self, **kwargs):
         self.net.with_params(**kwargs)
         return self
-    
+
     def with_keras_params(self, **kwargs):
         self.net.with_keras_params(**kwargs)
         return self
-    
+
     def with_compile_params(self, **kwargs):
         self.compile_params.update(kwargs)
         return self
-    
+
     def get_model(self):
         return self.net.get_model()
-        
+
     def apply_to_weights(self, old_weights):
         return self.net.apply_to_weights(old_weights)
-        
+
     def compile_model(self, **kwargs):
         compile_params = copy.deepcopy(self.compile_params)
         compile_params.update(kwargs)
         return self.get_model().compile(**compile_params)
-        
+
     def compiled(self, **kwargs):
         if not self.model_compiled:
             self.compile_model(**kwargs)
             self.model_compiled = True
         return self
-        
+
     def train(self, batchsize=1):
         self.compiled()
         x, y = self.net.compute_samples()
         history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize)
         return history.history['loss'][-1]
-        
+
+    def train_other(self, other_network, batchsize=1):
+        self.compiled()
+        other_network.compiled()
+        x, y = other_network.net.compute_samples()
+        history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize)
+        return history.history['loss'][-1]
 
 
 if __name__ == '__main__':
@@ -544,7 +543,8 @@ if __name__ == '__main__':
                 exp.run_net(net, 100)
             exp.log(exp.counters)
 
-    if False: # is_fixpoint was wrong because it trivially returned the old weights
+    if False:
+        # is_fixpoint was wrong because it trivially returned the old weights
         with IdentLearningExperiment() as exp:
             net = LearningNeuralNetwork(width=2, depth=2, features=2, )\
                 .with_keras_params(activation='sigmoid', use_bias=False, ) \
@@ -559,10 +559,12 @@ if __name__ == '__main__':
             net.print_weights()
             time.sleep(1)
             print(net.is_fixpoint(epsilon=0.1e-6))
-    if False: # ok so this works quite realiably
+    if False:
+        # ok so this works quite realiably
         with FixpointExperiment() as exp:
             run_count = 1000
-            net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2)).with_params(epsilon=0.0001)
+            net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2))\
+                .with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
             for run_id in tqdm(range(run_count+1)):
                 loss = net.compiled().train()
                 if run_id % 100 == 0:
@@ -571,7 +573,9 @@ if __name__ == '__main__':
                     print("Fixpoint? " + str(net.is_fixpoint()))
                     print("Loss " + str(loss))
                     print()
-    if True: # this does not work as the aggregation function screws over the fixpoint computation.... TODO: check for fixpoint in aggregated space... 
+    if False:
+        # this does not work as the aggregation function screws over the fixpoint computation....
+        # TODO: check for fixpoint in aggregated space...
         with FixpointExperiment() as exp:
             run_count = 1000
             net = TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, width=2, depth=2)).with_params(epsilon=0.1e-6)
@@ -587,22 +591,28 @@ if __name__ == '__main__':
                     print("Fixpoint after Agg? " + str(fp))
                     print("Loss " + str(loss))
                     print()
-    if False: # this explodes in our faces completely... NAN everywhere TODO: Wtf is happening here?
+    if False:
+        # this explodes in our faces completely... NAN everywhere
+        # TODO: Wtf is happening here?
         with FixpointExperiment() as exp:
-            run_count = 10
-            net = TrainingNeuralNetworkDecorator(RecurrentNeuralNetwork(width=2, depth=2)).with_params(epsilon=0.1e-6)
+            run_count = 10000
+            net = TrainingNeuralNetworkDecorator(RecurrentNeuralNetwork(width=2, depth=2))\
+                .with_params(epsilon=0.1e-2).with_keras_params(optimizer='sgd', activation='linear')
             for run_id in tqdm(range(run_count+1)):
                 loss = net.compiled().train()
-                if run_id % 1 == 0:
+                if run_id % 500 == 0:
                     net.print_weights()
                     # print(net.apply_to_network(net))
-                    print("Fixpoint? " + str(net.is_fixpoint(epsilon=0.0001)))
+                    print("Fixpoint? " + str(net.is_fixpoint()))
                     print("Loss " + str(loss))
                     print()
-    if False: # and this gets somewhat interesting... we can still achieve non-trivial fixpoints over multiple applications when training enough in-between
+    if True:
+        # and this gets somewhat interesting... we can still achieve non-trivial fixpoints
+        # over multiple applications when training enough in-between
         with MixedFixpointExperiment() as exp:
             for run_id in range(1):
-                net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2)).with_params(epsilon=0.0001)
+                net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2))\
+                    .with_params(epsilon=0.0001)
                 exp.run_net(net, 500, 10)
                 net.print_weights()
                 print("Fixpoint? " + str(net.is_fixpoint()))
