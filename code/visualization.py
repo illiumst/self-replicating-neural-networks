@@ -22,47 +22,42 @@ def build_args():
 
 def plot_latent_trajectories(data_dict, filename='latent_trajectory_plot'):
 
-    # TODO Fist and Last Position Markers
-
-    def norm(val, a=0, b=0.25):
-        return (val - a) / (b - a)
-
     bupu = cl.scales['9']['seq']['BuPu']
-    scale = cl.interp(bupu, len(data_dict))  # Map color scale to N bins
+    scale = cl.interp(bupu, len(data_dict)+1)  # Map color scale to N bins
 
     # Fit the mebedding space
     transformer = TSNE()
-    for trajectory in data_dict:
-        transformer.fit(trajectory)
+    for trajectory_id in data_dict:
+        transformer.fit(np.asarray(data_dict[trajectory_id]))
 
     # Transform data accordingly and plot it
     data = []
-    for t_id, trajectory in enumerate(data_dict):
-        transformed = transformer.fit(trajectory)
+    for trajectory_id in data_dict:
+        transformed = transformer._fit(np.asarray(data_dict[trajectory_id]))
         line_trace = go.Scatter(
             x=transformed[:, 0],
             y=transformed[:, 1],
             text='Hovertext goes here'.format(),
-            line=dict(color=scale[t_id]),
+            line=dict(color=scale[trajectory_id]),
             # legendgroup='Position -{}'.format(pos),
             # name='Position -{}'.format(pos),
             showlegend=False,
             # hoverinfo='text',
             mode='lines')
-        line_start = go.Scatter(mode='markers', x=transformed[0, 0], y=transformed[0, 1],
+        line_start = go.Scatter(mode='markers', x=[transformed[0, 0]], y=[transformed[0, 1]],
                                 marker=dict(
                                     color='rgb(255, 0, 0)',
-                                    size=2
+                                    size=4
                                 ),
                                 showlegend=False
                                 )
-        line_end = go.Scatter(mode='markers', x=transformed[-1, 0], y=transformed[-1, 1],
+        line_end = go.Scatter(mode='markers', x=[transformed[-1, 0]], y=[transformed[-1, 1]],
                               marker=dict(
                                   color='rgb(0, 0, 0)',
-                                  size=2
+                                  size=4
                               ),
                               showlegend=False
-                                )
+                              )
         data.extend([line_trace, line_start, line_end])
 
     layout = dict(title='{} - Latent Trajectory Movement'.format('Penis'),
@@ -74,30 +69,30 @@ def plot_latent_trajectories(data_dict, filename='latent_trajectory_plot'):
     pass
 
 
-def plot_latent_trajectories_3D(param_dict, filename='plot'):
+def plot_latent_trajectories_3D(data_dict, filename='plot'):
     def norm(val, a=0, b=0.25):
         return (val - a) / (b - a)
 
     bupu = cl.scales['9']['seq']['BuPu']
-    scale = cl.interp(bupu, len(param_dict.get('trajectories', [])))  # Map color scale to N bins
+    scale = cl.interp(bupu, len(data_dict)+1)  # Map color scale to N bins
 
-    max_len = max([len(trajectory) for trajectory in param_dict.get('trajectories', [])])
+    max_len = max([len(trajectory) for trajectory in data_dict.values()])
 
     # Fit the mebedding space
     transformer = TSNE()
-    for trajectory in param_dict.get('trajectories', []):
-        transformer.fit(trajectory)
+    for trajectory_id in data_dict:
+        transformer.fit(data_dict[trajectory_id])
 
     # Transform data accordingly and plot it
     data = []
-    for t_id, trajectory in enumerate(param_dict.get('trajectories', [])):
-        transformed = transformer.fit(trajectory)
+    for trajectory_id in data_dict:
+        transformed = transformer._fit(np.asarray(data_dict[trajectory_id]))
         trace = go.Scatter3d(
             x=transformed[:, 0],
             y=transformed[:, 1],
-            z=np.arange(max(max_len)),
+            z=np.arange(transformed.shape[0]),
             text='Hovertext goes here'.format(),
-            line=dict(color=scale[t_id]),
+            line=dict(color=scale[trajectory_id]),
             # legendgroup='Position -{}'.format(pos),
             # name='Position -{}'.format(pos),
             showlegend=False,
@@ -106,9 +101,9 @@ def plot_latent_trajectories_3D(param_dict, filename='plot'):
         data.append(trace)
 
     layout = go.Layout(scene=dict(aspectratio=dict(x=2, y=2, z=1),
-                         xaxis=dict(tickwidth=1, title='Number of Cells'),
-                         yaxis=dict(tickwidth=1, title='Number of Layers'),
-                         zaxis=dict(tickwidth=1, title='Position -pX')),
+                                  xaxis=dict(tickwidth=1, title='Transformed X'),
+                                  yaxis=dict(tickwidth=1, title='transformed Y'),
+                                  zaxis=dict(tickwidth=1, title='Epoch')),
                        title='{} - Latent Trajectory Movement'.format('Penis'),
                        width=800, height=800,
                        margin=dict(l=0, r=0, b=0, t=0))
@@ -125,18 +120,18 @@ def plot_histogram(bars_dict_list, filename='histogram_plot'):
     data = []
     for bar_id, bars_dict in bars_dict_list:
         hist = go.Histogram(
-                histfunc="count",
-                y=bars_dict.get('value', 14),
-                x=bars_dict.get('name', 'gimme a name'),
-                showlegend=False,
-                marker=dict(
-                    color=ryb[bar_id]
-                ),
-            )
+            histfunc="count",
+            y=bars_dict.get('value', 14),
+            x=bars_dict.get('name', 'gimme a name'),
+            showlegend=False,
+            marker=dict(
+                color=ryb[bar_id]
+            ),
+        )
         data.append(hist)
 
     layout=dict(title='{} Histogram Plot'.format('Experiment Name Penis'),
-                         height=400, width=400, margin=dict(l=0, r=0, t=0, b=0))
+                height=400, width=400, margin=dict(l=0, r=0, t=0, b=0))
 
     fig = go.Figure(data=data, layout=layout)
     pl.offline.plot(fig, auto_open=True, filename=filename)
@@ -161,7 +156,7 @@ def line_plot(line_dict_list, filename='lineplot'):
             marker=dict(color="#444"),
             line=dict(width=0),
             fillcolor=rdylgn_background[line_id],
-            )
+        )
 
         trace = go.Scatter(
             x=line_dict['x'],
@@ -183,7 +178,7 @@ def line_plot(line_dict_list, filename='lineplot'):
         data.extend([upper_bound, trace, lower_bound])
 
     layout=dict(title='{} Line Plot'.format('Experiment Name Penis'),
-                         height=800, width=800, margin=dict(l=0, r=0, t=0, b=0))
+                height=800, width=800, margin=dict(l=0, r=0, t=0, b=0))
 
     fig = go.Figure(data=data, layout=layout)
     pl.offline.plot(fig, auto_open=True, filename=filename)
@@ -194,5 +189,9 @@ if __name__ == '__main__':
     args = build_args()
     in_file = args.in_file[0]
     out_file = args.out_file
+
+    with open(in_file, 'rb') as in_f:
+        experiment = dill.load(in_f)
+        plot_latent_trajectories_3D(experiment.data_storage)
 
     print('aha')

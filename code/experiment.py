@@ -67,7 +67,7 @@ class FixpointExperiment(Experiment):
             net.self_attack()
             i += 1
             if run_id:
-                weights = net.get_weights()
+                weights = net.get_weights_flat()
                 self.add_trajectory_segment(run_id, weights)
         self.count(net)
 

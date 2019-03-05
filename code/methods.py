@@ -173,6 +173,7 @@ class FeedForwardNetwork(_BaseNetwork):
                 bar.update()
         return losses
 
+
 if __name__ == '__main__':
     with Experiment() as exp:
         features, cells, layers = 2, 2, 2
