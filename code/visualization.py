@@ -1,18 +1,16 @@
 import os
-import re
-from collections import defaultdict
-from tqdm import tqdm
-from argparse import ArgumentParser
-from distutils.util import strtobool
 
+from argparse import ArgumentParser
 import numpy as np
-import tensorflow as tf
 
 import plotly as pl
-from plotly import tools
 import plotly.graph_objs as go
 
+import colorlover as cl
+
 import dill
+
+from sklearn.manifold.t_sne import TSNE
 
 
 def build_args():
@@ -22,95 +20,174 @@ def build_args():
     return arg_parser.parse_args()
 
 
-def numberFromStrings(string) -> list:
-    numberfromstring = [int(x) for x in re.findall('\d+', string)]
-    return numberfromstring
+def plot_latent_trajectories(data_dict, filename='latent_trajectory_plot'):
 
+    # TODO Fist and Last Position Markers
 
-def visulize_as_tiled_subplot(plotting_tuple, filename='plot'):
     def norm(val, a=0, b=0.25):
         return (val - a) / (b - a)
 
-    data = np.asarray(plotting_tuple)
+    bupu = cl.scales['9']['seq']['BuPu']
+    scale = cl.interp(bupu, len(data_dict))  # Map color scale to N bins
 
-    fig = tools.make_subplots(rows=1, cols=3,
-                              subplot_titles=('Layers: 1', 'Layers: 2', 'Layers: 3'),
-                              horizontal_spacing=0.05)
+    # Fit the mebedding space
+    transformer = TSNE()
+    for trajectory in data_dict:
+        transformer.fit(trajectory)
 
-    for x in range(1, 4):
-        # Only select Plots with x Layers
-        scatter_slice = data[np.where(data[:, 2] == x)]
-        # Only Select Plots with x Cells
-        scatter_slice = scatter_slice[np.where(scatter_slice[:, 1] <= 10)]
-        # Normalize colors
-        colors = scatter_slice[:, 4]
-        # colors = np.apply_along_axis(norm, 0, scatter_slice[:, 4])
-        scatter = go.Scatter(x=scatter_slice[:, 3],
-                             y=scatter_slice[:, 1],
-                             hoverinfo='text',
-                             text=['Absolute Loss:<br>{}'.format(val) for val in colors],
-                             mode='markers',
-                             showlegend=False,
-                             marker=dict(size=10, color=colors, colorscale='Jet',
-                                         # Only plot the colorscale once, use one for all
-                                         showscale=True if x == 1 else False,
-                                         cmax=0.25, cmin=0,
-                                         colorbar=dict(y=0.5, x=1, tickmode='array', ticks='outside',
-                                                       tickvals=[0, 0.05, 0.10, 0.15, 0.20, 0.25],
-                                                       ticktext=["0.00", "0.05", "0.10", "0.15", "0.20", "0.25"]
-                                                       )
-                                         )
-                             )
-        fig.append_trace(scatter, 1, x,)
-        # TODO: Layout Loop
-        if x == 1:
-            fig['layout']['yaxis{}'.format(x)].update(tickwidth=1, title='Number of Cells')
-        if x == 2:
-            fig['layout']['xaxis{}'.format(x)].update(tickwidth=1, title='Position -X')
+    # Transform data accordingly and plot it
+    data = []
+    for t_id, trajectory in enumerate(data_dict):
+        transformed = transformer.fit(trajectory)
+        line_trace = go.Scatter(
+            x=transformed[:, 0],
+            y=transformed[:, 1],
+            text='Hovertext goes here'.format(),
+            line=dict(color=scale[t_id]),
+            # legendgroup='Position -{}'.format(pos),
+            # name='Position -{}'.format(pos),
+            showlegend=False,
+            # hoverinfo='text',
+            mode='lines')
+        line_start = go.Scatter(mode='markers', x=transformed[0, 0], y=transformed[0, 1],
+                                marker=dict(
+                                    color='rgb(255, 0, 0)',
+                                    size=2
+                                ),
+                                showlegend=False
+                                )
+        line_end = go.Scatter(mode='markers', x=transformed[-1, 0], y=transformed[-1, 1],
+                              marker=dict(
+                                  color='rgb(0, 0, 0)',
+                                  size=2
+                              ),
+                              showlegend=False
+                                )
+        data.extend([line_trace, line_start, line_end])
 
-    fig['layout'].update(title='{} - Mean Absolute Loss'.format(os.path.split('DESTINATION_OR_EXPERIMENT_NAME')[-1].upper()),
-                         height=300, width=800, margin=dict(l=50, r=0, t=60, b=50))
+    layout = dict(title='{} - Latent Trajectory Movement'.format('Penis'),
+                  height=800, width=800, margin=dict(l=0, r=0, t=0, b=0))
     # import plotly.io as pio
     # pio.write_image(fig, filename)
-    pl.offline.plot(fig, filename=filename)
+    fig = go.Figure(data=data, layout=layout)
+    pl.offline.plot(fig, auto_open=True, filename=filename)
     pass
 
 
-def visulize_as_splatter3d(plotting_tuple, filename='plot'):
-    # timesteps, cells, layers, positions, val
-    _ , cells, layers, position, val = zip(*plotting_tuple)
-    text = ['Cells: {}<br>Layers: {}<br>Position: {}<br>Mean(Min()): {}'.format(cells, layers, position, val)
-            for _, cells, layers, position, val in plotting_tuple]
+def plot_latent_trajectories_3D(param_dict, filename='plot'):
+    def norm(val, a=0, b=0.25):
+        return (val - a) / (b - a)
 
-    data = [go.Scatter3d(x=cells, y=layers, z=position, text=text, hoverinfo='text', mode='markers',
-                         marker=dict(color=val, colorscale='Jet', opacity=0.8,
-                                     colorbar=dict(y=0.5, x=0.9, title="Mean(Min(Seeds))"))
-                         )]
+    bupu = cl.scales['9']['seq']['BuPu']
+    scale = cl.interp(bupu, len(param_dict.get('trajectories', [])))  # Map color scale to N bins
+
+    max_len = max([len(trajectory) for trajectory in param_dict.get('trajectories', [])])
+
+    # Fit the mebedding space
+    transformer = TSNE()
+    for trajectory in param_dict.get('trajectories', []):
+        transformer.fit(trajectory)
+
+    # Transform data accordingly and plot it
+    data = []
+    for t_id, trajectory in enumerate(param_dict.get('trajectories', [])):
+        transformed = transformer.fit(trajectory)
+        trace = go.Scatter3d(
+            x=transformed[:, 0],
+            y=transformed[:, 1],
+            z=np.arange(max(max_len)),
+            text='Hovertext goes here'.format(),
+            line=dict(color=scale[t_id]),
+            # legendgroup='Position -{}'.format(pos),
+            # name='Position -{}'.format(pos),
+            showlegend=False,
+            # hoverinfo='text',
+            mode='lines')
+        data.append(trace)
+
     layout = go.Layout(scene=dict(aspectratio=dict(x=2, y=2, z=1),
-                                  xaxis=dict(tickwidth=1, title='Number of Cells'),
-                                  yaxis=dict(tickwidth=1, title='Number of Layers'),
-                                  zaxis=dict(tickwidth=1, title='Position -pX')),
+                         xaxis=dict(tickwidth=1, title='Number of Cells'),
+                         yaxis=dict(tickwidth=1, title='Number of Layers'),
+                         zaxis=dict(tickwidth=1, title='Position -pX')),
+                       title='{} - Latent Trajectory Movement'.format('Penis'),
+                       width=800, height=800,
                        margin=dict(l=0, r=0, b=0, t=0))
+
     fig = go.Figure(data=data, layout=layout)
-    pl.offline.plot(fig, auto_open=True, filename=filename)  # filename='3d-scatter_plot'
+    pl.offline.plot(fig, auto_open=True, filename=filename)
+    pass
 
 
-def compile_run_name(path: str) -> dict:
-    """
-    Retrieve all names, extract index positions and group by seeds.
+def plot_histogram(bars_dict_list, filename='histogram_plot'):
+    # catagorical
+    ryb = cl.scales['10']['div']['RdYlBu']
 
-    :param path: Path to the current TB folder of a sinle NN configuration
-    :return: List of foldernames to filter for.
-    """
-    config_keys = ['run_seed', 'timesteps', 'index_position', 'cell_count', 'layers', 'cell_type']
-    found_configurations = defaultdict(list)
-    for dname in os.listdir(path):
-        if os.path.isdir(os.path.join(path, dname)):
-            this_config = {key: value for key, value in zip(config_keys, dname.split("_"))}
-            found_configurations[this_config['index_position']].append(dname)
+    data = []
+    for bar_id, bars_dict in bars_dict_list:
+        hist = go.Histogram(
+                histfunc="count",
+                y=bars_dict.get('value', 14),
+                x=bars_dict.get('name', 'gimme a name'),
+                showlegend=False,
+                marker=dict(
+                    color=ryb[bar_id]
+                ),
+            )
+        data.append(hist)
 
-    return found_configurations
+    layout=dict(title='{} Histogram Plot'.format('Experiment Name Penis'),
+                         height=400, width=400, margin=dict(l=0, r=0, t=0, b=0))
 
+    fig = go.Figure(data=data, layout=layout)
+    pl.offline.plot(fig, auto_open=True, filename=filename)
+
+    pass
+
+
+def line_plot(line_dict_list, filename='lineplot'):
+    # lines with standard deviation
+    # Transform data accordingly and plot it
+    data = []
+    rdylgn = cl.scales['10']['div']['RdYlGn']
+    rdylgn_background = [scale + (0.4,) for scale in cl.to_numeric(rdylgn)]
+    for line_id, line_dict in enumerate(line_dict_list):
+        name = line_dict.get('name', 'gimme a name')
+
+        upper_bound = go.Scatter(
+            name='Upper Bound',
+            x=line_dict['x'],
+            y=line_dict['upper_y'],
+            mode='lines',
+            marker=dict(color="#444"),
+            line=dict(width=0),
+            fillcolor=rdylgn_background[line_id],
+            )
+
+        trace = go.Scatter(
+            x=line_dict['x'],
+            y=line_dict['main_y'],
+            mode='lines',
+            name=name,
+            line=dict(color=line_id),
+            fillcolor=rdylgn_background[line_id],
+            fill='tonexty')
+
+        lower_bound = go.Scatter(
+            name='Lower Bound',
+            x=line_dict['x'],
+            y=line_dict['lower_y'],
+            marker=dict(color="#444"),
+            line=dict(width=0),
+            mode='lines')
+
+        data.extend([upper_bound, trace, lower_bound])
+
+    layout=dict(title='{} Line Plot'.format('Experiment Name Penis'),
+                         height=800, width=800, margin=dict(l=0, r=0, t=0, b=0))
+
+    fig = go.Figure(data=data, layout=layout)
+    pl.offline.plot(fig, auto_open=True, filename=filename)
+    pass
 
 
 if __name__ == '__main__':
@@ -118,7 +195,4 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    with open(in_file, 'rb') as dill_file:
-        experiment = dill.load(dill_file)
-
-    print('hi')
+    print('aha')

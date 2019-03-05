@@ -3,6 +3,8 @@ import time
 import dill
 from tqdm import tqdm
 
+from collections import defaultdict
+
 
 class Experiment:
     
@@ -17,6 +19,7 @@ class Experiment:
         self.base_dir = self.experiment_name
         self.next_iteration = 0
         self.log_messages = []
+        self.data_storage = defaultdict(list)
     
     def __enter__(self):
         self.dir = os.path.join(self.base_dir, 'experiments', 'exp-{name}-{id}-{it}'.format(
@@ -46,6 +49,10 @@ class Experiment:
             with open(os.path.join(self.dir, "{name}.dill".format(name=name)), "wb") as dill_file:
                 dill.dump(value, dill_file)
 
+    def add_trajectory_segment(self, run_id, trajectory):
+        self.data_storage[run_id].append(trajectory)
+        return
+
 
 class FixpointExperiment(Experiment):
     
@@ -54,11 +61,14 @@ class FixpointExperiment(Experiment):
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
 
-    def run_net(self, net, step_limit=100):
+    def run_net(self, net, step_limit=100, run_id=0):
         i = 0
         while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
             net.self_attack()
             i += 1
+            if run_id:
+                weights = net.get_weights()
+                self.add_trajectory_segment(run_id, weights)
         self.count(net)
 
     def count(self, net):
@@ -78,7 +88,11 @@ class FixpointExperiment(Experiment):
 
 class MixedFixpointExperiment(FixpointExperiment):
 
-    def run_net(self, net, trains_per_application=100, step_limit=100):
+    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0):
+        # TODO Where to place the trajectory storage ?
+        # weights = net.get_weights()
+        # self.add_trajectory_segment(run_id, weights)
+
         i = 0
         while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
             net.self_attack()

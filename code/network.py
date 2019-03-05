@@ -136,11 +136,11 @@ class NeuralNetwork(PrintingObject):
                         return False
         return True
 
-    def repr_weights(self):
-        return self.__class__.weights_to_string(self.get_weights())
+    def repr_weights(self, weights=None):
+        return self.weights_to_string(weights or self.get_weights())
 
-    def print_weights(self):
-        print(self.repr_weights())
+    def print_weights(self, weights=None):
+        print(self.repr_weights(weights))
 
 
 class WeightwiseNeuralNetwork(NeuralNetwork):
@@ -605,7 +605,7 @@ class TrainingNeuralNetworkDecorator(NeuralNetwork):
 if __name__ == '__main__':
     if False:
         with FixpointExperiment() as exp:
-            for run_id in tqdm(range(100)):
+            for run_id in tqdm(range(1)):
                 # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
                 # net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2)\
                 net = FFTNeuralNetwork(aggregates=4, width=2, depth=2) \
@@ -613,9 +613,10 @@ if __name__ == '__main__':
                 # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')\
                 # .with_params(print_all_weight_updates=True)
                 # net.print_weights()
-                exp.run_net(net, 100)
-            exp.log(exp.counters)
 
+                # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
+                exp.run_net(net, 100, run_id=run_id+1)
+            exp.log(exp.counters)
     if False:
         # is_fixpoint was wrong because it trivially returned the old weights
         with IdentLearningExperiment() as exp:
@@ -679,15 +680,16 @@ if __name__ == '__main__':
                     print("Fixpoint? " + str(net.is_fixpoint()))
                     print("Loss " + str(loss))
                     print()
-    if True:
+    if False:
         # and this gets somewhat interesting... we can still achieve non-trivial fixpoints
         # over multiple applications when training enough in-between
         with MixedFixpointExperiment() as exp:
-            for run_id in range(100):
-                net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2))\
-                    .with_params(epsilon=0.0001)
+            for run_id in range(10):
+                net = TrainingNeuralNetworkDecorator(FFTNeuralNetwork(2, width=2, depth=2))\
+                    .with_params(epsilon=0.0001, activation='sigmoid')
                 exp.run_net(net, 500, 10)
+
                 net.print_weights()
+
                 print("Fixpoint? " + str(net.is_fixpoint()))
-                print()
             exp.log(exp.counters)
