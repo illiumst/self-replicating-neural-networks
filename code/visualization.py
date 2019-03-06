@@ -1,4 +1,7 @@
 import os
+from typing import Union
+
+from experiment import Experiment, SoupExperiment
 
 from argparse import ArgumentParser
 import numpy as np
@@ -20,9 +23,10 @@ def build_args():
     return arg_parser.parse_args()
 
 
-def plot_latent_trajectories(data_dict, filename='latent_trajectory_plot'):
-
+def plot_latent_trajectories(soup_or_experiment, filename='latent_trajectory_plot'):
+    assert isinstance(soup_or_experiment, Union[Experiment, SoupExperiment])
     bupu = cl.scales['9']['seq']['BuPu']
+    data_dict = soup_or_experiment.data_storage
     scale = cl.interp(bupu, len(data_dict)+1)  # Map color scale to N bins
 
     # Fit the mebedding space
@@ -185,13 +189,28 @@ def line_plot(line_dict_list, filename='lineplot'):
     pass
 
 
+def search_and_apply(file_or_folder, plotting_function):
+    if os.path.isdir(file_or_folder):
+        for sub_file_or_folder in os.scandir(file_or_folder):
+            search_and_apply(sub_file_or_folder.path, plotting_function)
+    elif file_or_folder.endswith('.dill') and not os.path.exists('{}.html'.format(file_or_folder[:-5])):
+        print('Apply Plotting function "{func}" on file "{file}"'.format(func=plotting_function.__name__,
+                                                                         file=file_or_folder)
+              )
+        with open(file_or_folder, 'rb') as in_f:
+            exp = dill.load(in_f)
+
+        plotting_function(exp, filename='{}.html'.format(file_or_folder[:-5]))
+    else:
+        # This was either another FilyType or Plot.html alerady exists.
+        pass
+
+
+
+
 if __name__ == '__main__':
     args = build_args()
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    with open(in_file, 'rb') as in_f:
-        experiment = dill.load(in_f)
-        plot_latent_trajectories_3D(experiment.data_storage)
-
-    print('aha')
+    search_and_apply(in_file, plot_latent_trajectories)
