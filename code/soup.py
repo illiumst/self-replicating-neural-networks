@@ -41,11 +41,8 @@ class Soup:
                     other_particle_id = int(prng() * len(self.particles))
                     other_particle = self.particles[other_particle_id]
                     particle.train_other(other_particle)
-                try:
-                    for _ in range(self.params.get('train', 0)):
-                        particle.compiled().train()
-                except AttributeError:
-                    pass
+                for _ in range(self.params.get('train', 0)):
+                    particle.compiled().train()
                 if self.params.get('remove_divergent') and particle.is_diverged():
                     self.particles[particle_id] = self.generator()
                 if self.params.get('remove_zero') and particle.is_zero():
@@ -66,6 +63,11 @@ class Soup:
             else:
                 counters['other'] += 1
         return counters
+        
+    def print_all(self):
+        for particle in self.particles:
+            particle.print_weights()
+            print(particle.is_fixpoint())
 
 
 class LearningSoup(Soup):
@@ -89,16 +91,18 @@ if __name__ == '__main__':
                 exp.log(soup.count())
 
     if True:
-        with SoupExperiment() as exp:
+        with SoupExperiment("soup") as exp:
             for run_id in range(1):
                 net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2)).with_keras_params(
-                    activation='linear')
+                    activation='sigmoid').with_params(epsilon=0.0001)
+
                 # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid')\
                 # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
                 # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
-                soup = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True).with_params(train=500)
+                soup = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=200)
                 soup.seed()
                 for _ in tqdm(range(10)):
                     soup.evolve()
+                    soup.print_all()
                 exp.log(soup.count())
 

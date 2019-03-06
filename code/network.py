@@ -61,10 +61,12 @@ class NeuralNetwork(PrintingObject):
 
     def __init__(self, **params):
         super().__init__()
-        self.model = Sequential()
         self.params = dict(epsilon=0.00000000000001)
         self.params.update(params)
         self.keras_params = dict(activation='linear', use_bias=False)
+
+    def get_model(self):
+        raise NotImplementedError
 
     def get_params(self):
         return self.params
@@ -81,13 +83,13 @@ class NeuralNetwork(PrintingObject):
         return self
 
     def get_weights(self):
-        return self.model.get_weights()
+        return self.get_model().get_weights()
 
     def get_weights_flat(self):
         return np.hstack([weight.flatten() for weight in self.get_weights()])
 
     def set_weights(self, new_weights):
-        return self.model.set_weights(new_weights)
+        return self.get_model().set_weights(new_weights)
 
     def apply_to_weights(self, old_weights):
         raise NotImplementedError
@@ -117,7 +119,7 @@ class NeuralNetwork(PrintingObject):
         return NeuralNetwork.are_weights_diverged(self.get_weights())
 
     def is_zero(self, epsilon=None):
-        epsilon = epsilon or self.params.get('epsilon')
+        epsilon = epsilon or self.get_params().get('epsilon')
         return NeuralNetwork.are_weights_within(self.get_weights(), -epsilon, epsilon)
 
     def is_fixpoint(self, degree=1, epsilon=None):
@@ -159,10 +161,14 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
         super().__init__(**kwargs)
         self.width = width
         self.depth = depth
+        self.model = Sequential()
         self.model.add(Dense(units=self.width, input_dim=4, **self.keras_params))
         for _ in range(self.depth-1):
             self.model.add(Dense(units=self.width, **self.keras_params))
         self.model.add(Dense(units=1, **self.keras_params))
+
+    def get_model(self):
+        return self.model
 
     def apply(self, *inputs):
         stuff = np.transpose(np.array([[inputs[0]], [inputs[1]], [inputs[2]], [inputs[3]]]))
@@ -258,10 +264,14 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         self.aggregates = aggregates
         self.width = width
         self.depth = depth
+        self.model = Sequential()
         self.model.add(Dense(units=width, input_dim=self.aggregates, **self.keras_params))
         for _ in range(depth-1):
             self.model.add(Dense(units=width, **self.keras_params))
         self.model.add(Dense(units=self.aggregates, **self.keras_params))
+
+    def get_model(self):
+        return self.model
 
     def get_aggregator(self):
         return self.params.get('aggregator', self.aggregate_average)
@@ -395,10 +405,14 @@ class FFTNeuralNetwork(NeuralNetwork):
         self.aggregates = aggregates
         self.width = width
         self.depth = depth
+        self.model = Sequential()
         self.model.add(Dense(units=width, input_dim=self.aggregates, **self.keras_params))
         for _ in range(depth-1):
             self.model.add(Dense(units=width, **self.keras_params))
         self.model.add(Dense(units=self.aggregates, **self.keras_params))
+
+    def get_model(self):
+        return self.model
 
     def get_shuffler(self):
         return self.params.get('shuffler', self.shuffle_not)
@@ -452,10 +466,14 @@ class RecurrentNeuralNetwork(NeuralNetwork):
         self.features = 1
         self.width = width
         self.depth = depth
+        self.model = Sequential()
         self.model.add(SimpleRNN(units=width, input_dim=self.features, return_sequences=True, **self.keras_params))
         for _ in range(depth-1):
             self.model.add(SimpleRNN(units=width, return_sequences=True, **self.keras_params))
         self.model.add(SimpleRNN(units=self.features, return_sequences=True, **self.keras_params))
+
+    def get_model(self):
+        return self.model
 
     def apply(self, *inputs):
         stuff = np.transpose(np.array([[[inputs[i]] for i in range(len(inputs))]]))
@@ -545,22 +563,15 @@ class LearningNeuralNetwork(NeuralNetwork):
                 bar.update()
 
 
-class TrainingNeuralNetworkDecorator(NeuralNetwork):
+class TrainingNeuralNetworkDecorator():
 
     def __init__(self, net, **kwargs):
-        super().__init__(**kwargs)
         self.net = net
         self.compile_params = dict(loss='mse', optimizer='sgd')
         self.model_compiled = False
 
-    def get_params(self):
-        return self.net.get_params()
-
-    def get_keras_params(self):
-        return self.net.get_keras_params()
-
-    def get_compile_params(self):
-        return self.net.get_compile_params()
+    def __getattr__(self, name):
+        return getattr(self.net, name)
 
     def with_params(self, **kwargs):
         self.net.with_params(**kwargs)
@@ -570,15 +581,12 @@ class TrainingNeuralNetworkDecorator(NeuralNetwork):
         self.net.with_keras_params(**kwargs)
         return self
 
+    def get_compile_params(self):
+        return self.compile_params
+
     def with_compile_params(self, **kwargs):
         self.compile_params.update(kwargs)
         return self
-
-    def get_model(self):
-        return self.net.model
-
-    def apply_to_weights(self, old_weights):
-        return self.net.apply_to_weights(old_weights)
 
     def compile_model(self, **kwargs):
         compile_params = copy.deepcopy(self.compile_params)
@@ -639,7 +647,7 @@ if __name__ == '__main__':
     if True:
         # ok so this works quite realiably
         with FixpointExperiment() as exp:
-            run_count = 100
+            run_count = 1000
             net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2))\
                 .with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
             for run_id in tqdm(range(run_count+1)):
