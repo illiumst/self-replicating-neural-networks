@@ -1,7 +1,8 @@
 import os
-from typing import Union
 
-from experiment import Experiment, SoupExperiment
+from experiment import Experiment
+# noinspection PyUnresolvedReferences
+from soup import Soup
 
 from argparse import ArgumentParser
 import numpy as np
@@ -23,29 +24,42 @@ def build_args():
     return arg_parser.parse_args()
 
 
+def build_from_soup(soup):
+    particles = soup.historical_particles
+    particle_dict = [dict(trajectory=[timestamp['weights'] for timestamp in particle],
+                          fitted=[timestamp['fitted'] for timestamp in particle],
+                          loss=[timestamp['loss'] for timestamp in particle],
+                          time=[timestamp['time'] for timestamp in particle]) for particle in particles.values()]
+    return particle_dict
+
+
 def plot_latent_trajectories(soup_or_experiment, filename='latent_trajectory_plot'):
-    assert isinstance(soup_or_experiment, Union[Experiment, SoupExperiment])
-    bupu = cl.scales['9']['seq']['BuPu']
-    data_dict = soup_or_experiment.data_storage
+    assert isinstance(soup_or_experiment, (Experiment, Soup))
+    bupu = cl.scales['11']['div']['RdYlGn']
+    data_dict = soup_or_experiment.data_storage if isinstance(soup_or_experiment, Experiment) \
+        else build_from_soup(soup_or_experiment)
     scale = cl.interp(bupu, len(data_dict)+1)  # Map color scale to N bins
 
     # Fit the mebedding space
     transformer = TSNE()
-    for trajectory_id in data_dict:
-        transformer.fit(np.asarray(data_dict[trajectory_id]))
+    for particle_dict in data_dict:
+        array = np.asarray([np.hstack([x.flatten() for x in timestamp]).flatten()
+                             for timestamp in particle_dict['trajectory']])
+        particle_dict['trajectory'] = array
+        transformer.fit(array)
 
     # Transform data accordingly and plot it
     data = []
-    for trajectory_id in data_dict:
-        transformed = transformer._fit(np.asarray(data_dict[trajectory_id]))
+    for p_id, particle_dict in enumerate(data_dict):
+        transformed = transformer._fit(np.asarray(particle_dict['trajectory']))
         line_trace = go.Scatter(
             x=transformed[:, 0],
             y=transformed[:, 1],
             text='Hovertext goes here'.format(),
-            line=dict(color=scale[trajectory_id]),
+            line=dict(color=scale[p_id]),
             # legendgroup='Position -{}'.format(pos),
-            # name='Position -{}'.format(pos),
-            showlegend=False,
+            name='Particle - {}'.format(p_id),
+            showlegend=True,
             # hoverinfo='text',
             mode='lines')
         line_start = go.Scatter(mode='markers', x=[transformed[0, 0]], y=[transformed[0, 1]],
@@ -73,34 +87,38 @@ def plot_latent_trajectories(soup_or_experiment, filename='latent_trajectory_plo
     pass
 
 
-def plot_latent_trajectories_3D(data_dict, filename='plot'):
+def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
     def norm(val, a=0, b=0.25):
         return (val - a) / (b - a)
 
-    bupu = cl.scales['9']['seq']['BuPu']
+    data_dict = soup_or_experiment.data_storage if isinstance(soup_or_experiment, Experiment) \
+        else build_from_soup(soup_or_experiment)
+
+    bupu = cl.scales['11']['div']['RdYlGn']
     scale = cl.interp(bupu, len(data_dict)+1)  # Map color scale to N bins
 
-    max_len = max([len(trajectory) for trajectory in data_dict.values()])
-
-    # Fit the mebedding space
+    # Fit the embedding space
     transformer = TSNE()
-    for trajectory_id in data_dict:
-        transformer.fit(data_dict[trajectory_id])
+    for particle_dict in data_dict:
+        array = np.asarray([np.hstack([x.flatten() for x in timestamp]).flatten()
+                            for timestamp in particle_dict['trajectory']])
+        particle_dict['trajectory'] = array
+        transformer.fit(array)
 
     # Transform data accordingly and plot it
     data = []
-    for trajectory_id in data_dict:
-        transformed = transformer._fit(np.asarray(data_dict[trajectory_id]))
+    for p_id, particle_dict in enumerate(data_dict):
+        transformed = transformer._fit(particle_dict['trajectory'])
         trace = go.Scatter3d(
             x=transformed[:, 0],
             y=transformed[:, 1],
-            z=np.arange(transformed.shape[0]),
-            text='Hovertext goes here'.format(),
-            line=dict(color=scale[trajectory_id]),
-            # legendgroup='Position -{}'.format(pos),
-            # name='Position -{}'.format(pos),
-            showlegend=False,
-            # hoverinfo='text',
+            z=np.asarray(particle_dict['time']),
+            text='Particle: {}<br> It had {} lifes.'.format(p_id, len(particle_dict['trajectory'])),
+            line=dict(color=scale[p_id]),
+            # legendgroup='Particle - {}'.format(p_id),
+            name='Particle -{}'.format(p_id),
+            # showlegend=True,
+            hoverinfo='text',
             mode='lines')
         data.append(trace)
 
@@ -109,7 +127,7 @@ def plot_latent_trajectories_3D(data_dict, filename='plot'):
                                   yaxis=dict(tickwidth=1, title='transformed Y'),
                                   zaxis=dict(tickwidth=1, title='Epoch')),
                        title='{} - Latent Trajectory Movement'.format('Penis'),
-                       width=800, height=800,
+                       # width=0, height=0,
                        margin=dict(l=0, r=0, b=0, t=0))
 
     fig = go.Figure(data=data, layout=layout)
@@ -213,4 +231,4 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_latent_trajectories)
+    search_and_apply(in_file, plot_latent_trajectories_3D)
