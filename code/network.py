@@ -1,5 +1,3 @@
-import math
-import copy
 import numpy as np
 
 from keras.models import Sequential
@@ -47,9 +45,9 @@ class NeuralNetwork(PrintingObject):
         for layer_id, layer in enumerate(network_weights):
             for cell_id, cell in enumerate(layer):
                 for weight_id, weight in enumerate(cell):
-                    if math.isnan(weight):
+                    if np.isnan(weight):
                         return True
-                    if math.isinf(weight):
+                    if np.isinf(weight):
                         return True
         return False
 
@@ -100,13 +98,13 @@ class NeuralNetwork(PrintingObject):
         return self
 
     def get_weights(self):
-        return self.get_model().get_weights()
+        return self.model.get_weights()
 
     def get_weights_flat(self):
         return np.hstack([weight.flatten() for weight in self.get_weights()])
 
     def set_weights(self, new_weights):
-        return self.get_model().set_weights(new_weights)
+        return self.model.set_weights(new_weights)
 
     def apply_to_weights(self, old_weights):
         raise NotImplementedError
@@ -133,11 +131,11 @@ class NeuralNetwork(PrintingObject):
         return self.attack(new_other_network)
 
     def is_diverged(self):
-        return NeuralNetwork.are_weights_diverged(self.get_weights())
+        return self.are_weights_diverged(self.get_weights())
 
     def is_zero(self, epsilon=None):
         epsilon = epsilon or self.get_params().get('epsilon')
-        return NeuralNetwork.are_weights_within(self.get_weights(), -epsilon, epsilon)
+        return self.are_weights_within(self.get_weights(), -epsilon, epsilon)
 
     def is_fixpoint(self, degree=1, epsilon=None):
         assert degree >= 1, "degree must be >= 1"
@@ -167,7 +165,7 @@ class NeuralNetwork(PrintingObject):
     def make_state(self, **kwargs):
         weights = self.get_weights_flat()
         state = {'class': self.__class__.__name__, 'weights': weights}
-        if any(np.isinf(weights)):
+        if any(np.isnan(weights)) or any(np.isinf(weights)):
             return None
         state.update(kwargs)
         return state
@@ -593,7 +591,8 @@ class LearningNeuralNetwork(NeuralNetwork):
             for epoch in range(epochs):
                 old_weights = self.get_weights()
                 x = reduction(old_weights, self.features)
-                history = self.model.fit(x=x, y=x, verbose=0, batch_size=batchsize)
+                savestateCallback = SaveStateCallback(self, epoch=epoch)
+                history = self.model.fit(x=x, y=x, verbose=0, batch_size=batchsize, callbacks=savestateCallback)
                 bar.postfix[1]["value"] = history.history['loss'][-1]
                 bar.update()
 
@@ -654,18 +653,20 @@ if __name__ == '__main__':
     if False:
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(100)):
-                net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
+                # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
                 # net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2)\
-                # net = FFTNeuralNetwork(aggregates=4, width=2, depth=2) \
-                #     .with_params(print_all_weight_updates=False, use_bias=False)
+                net = FFTNeuralNetwork(aggregates=4, width=2, depth=2) \
+                    .with_params(print_all_weight_updates=False, use_bias=False)
                 # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')\
                 # .with_params(print_all_weight_updates=True)
                 # net.print_weights()
 
                 # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
                 exp.run_net(net, 100, run_id=run_id+1)
+                exp.historical_particles[run_id] = net
             exp.log(exp.counters)
     if False:
+        # TODO SI: Ich muss noch apply to weights implementieren
         # is_fixpoint was wrong because it trivially returned the old weights
         with IdentLearningExperiment() as exp:
             net = LearningNeuralNetwork(width=2, depth=2, features=2, )\
@@ -674,17 +675,13 @@ if __name__ == '__main__':
             net.print_weights()
             time.sleep(0.1)
             print(net.is_fixpoint(epsilon=0.1e-6))
-            print()
             net.learn(1, reduction=LearningNeuralNetwork.fft_reduction)
-            import time
-            time.sleep(0.1)
-            net.print_weights()
-            time.sleep(0.1)
             print(net.is_fixpoint(epsilon=0.1e-6))
-    if True:
+
+    if False:
         # ok so this works quite realiably
         with FixpointExperiment() as exp:
-            for i in range(10):
+            for i in range(1):
 
                 run_count = 1000
                 net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2))\

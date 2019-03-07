@@ -59,7 +59,7 @@ class Soup:
                     particle.attack(other_particle)
                     description['action'] = 'attacking'
                     description['counterpart'] = other_particle.get_uid()
-                if prng() < self.params.get('train_other_rate'):
+                if prng() < self.params.get('train_other_rate') and hasattr(self, 'train_other'):
                     other_particle_id = int(prng() * len(self.particles))
                     other_particle = self.particles[other_particle_id]
                     particle.train_other(other_particle)
@@ -150,7 +150,7 @@ class ParticleDecorator:
         
 
 if __name__ == '__main__':
-    if False:
+    if True:
         with SoupExperiment() as exp:
             for run_id in range(1):
                 net_generator = lambda: WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
@@ -159,11 +159,11 @@ if __name__ == '__main__':
                 # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
                 soup = Soup(100, net_generator).with_params(remove_divergent=True, remove_zero=True)
                 soup.seed()
-                for _ in tqdm(range(100)):
+                for _ in tqdm(range(1000)):
                     soup.evolve()
                 exp.log(soup.count())
 
-    if True:
+    if False:
         with SoupExperiment("soup") as exp:
             for run_id in range(1):
                 net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2)).with_keras_params(

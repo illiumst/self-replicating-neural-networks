@@ -18,13 +18,12 @@ class Experiment:
         self.base_dir = self.experiment_name
         self.next_iteration = 0
         self.log_messages = []
-        self.historical_particles = dict()
+        self.historical_particles = {}
     
     def __enter__(self):
-        self.dir = os.path.join(self.base_dir, 'experiments', 'exp-{name}-{id}-{it}'.format(
+        self.dir = os.path.join('experiments', 'exp-{name}-{id}-{it}'.format(
             name=self.experiment_name, id=self.experiment_id, it=self.next_iteration)
                                 )
-
         os.makedirs(self.dir)
         print("** created {dir} **".format(dir=self.dir))
         return self
@@ -60,13 +59,9 @@ class Experiment:
             with open(os.path.join(self.dir, "{name}.dill".format(name=name)), "wb") as dill_file:
                 dill.dump(value, dill_file)
 
-    def add_trajectory_segment(self, run_id, trajectory):
-        self.historical_particles[run_id].append(trajectory)
-        return
-
 
 class FixpointExperiment(Experiment):
-    
+
     def __init__(self):
         super().__init__(name=self.__class__.__name__)
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
@@ -78,8 +73,7 @@ class FixpointExperiment(Experiment):
             net.self_attack()
             i += 1
             if run_id:
-                weights = net.get_weights_flat()
-                self.add_trajectory_segment(run_id, weights)
+                net.save_state(time=run_id)
         self.count(net)
 
     def count(self, net):
