@@ -25,14 +25,16 @@ def count(counters, net, notable_nets=[]):
         counters['other'] += 1
     return counters, notable_nets
 
-with Experiment('fixpoint-density') as exp:
-    exp.trials = 1000
+with Experiment('training_fixpoint') as exp:
+    exp.trials = 5
+    exp.run_count = 500
     exp.epsilon = 1e-4
     net_generators = []
     for activation in ['linear', 'sigmoid', 'relu']:
-        net_generators += [lambda activation=activation: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-        net_generators += [lambda activation=activation: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-        net_generators += [lambda activation=activation: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+        for use_bias in [False]:
+            net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+            net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+            net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
     all_counters = []
     all_notable_nets = []
     all_names = []
@@ -40,8 +42,10 @@ with Experiment('fixpoint-density') as exp:
         counters = generate_counters()
         notable_nets = []
         for _ in tqdm(range(exp.trials)):
-            net = net_generator().with_params(epsilon=exp.epsilon)
-            name = str(net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias='" + str(net.get_keras_params().get('use_bias')) + "'"
+            net = TrainingNeuralNetworkDecorator(net_generator()).with_params(epsilon=exp.epsilon)
+            name = str(net.net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
+            for run_id in range(exp.run_count):
+                loss = net.compiled().train(epoch=run_id+1)
             count(counters, net, notable_nets)
         all_counters += [counters]
         all_notable_nets += [notable_nets]

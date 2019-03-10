@@ -9,13 +9,6 @@ from soup import prng
 
 from statistics import mean
 avg = mean
-
-def generate(e=0.0, f=0.0):
-    return [
-        np.array([[1.0+e, 0.0+f], [0.0+f, 0.0+f], [0.0+f, 0.0+f], [0.0+f, 0.0+f]], dtype=np.float32),
-        np.array([[1.0+e, 0.0+f], [0.0+f, 0.0+f]], dtype=np.float32),
-        np.array([[1.0+e], [0.0+f]], dtype=np.float32)
-    ]
     
 def generate_fixpoint_weights():
     return [

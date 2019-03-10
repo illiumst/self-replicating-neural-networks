@@ -697,8 +697,6 @@ if __name__ == '__main__':
                 exp.historical_particles[i] = net
                 K.clear_session()
     if False:
-        # this does not work as the aggregation function screws over the fixpoint computation....
-        # TODO: check for fixpoint in aggregated space...
         with FixpointExperiment() as exp:
             run_count = 1000
             net = TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, width=2, depth=2)).with_params(epsilon=0.1e-6)
