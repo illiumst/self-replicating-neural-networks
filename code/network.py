@@ -162,11 +162,27 @@ class NeuralNetwork(PrintingObject):
     def print_weights(self, weights=None):
         print(self.repr_weights(weights))
 
+
+class ParticleDecorator:
+    next_uid = 0
+
+    def __init__(self, net):
+        self.uid = self.next_uid
+        self.next_uid += 1
+        self.net = net
+        self.states = []
+
+    def __getattr__(self, name):
+        return getattr(self.net, name)
+
+    def get_uid(self):
+        return self.uid
+
     def make_state(self, **kwargs):
-        weights = self.get_weights_flat()
-        state = {'class': self.__class__.__name__, 'weights': weights}
-        if any(np.isnan(weights)) or any(np.isinf(weights)):
+        weights = self.net.get_weights_flat()
+        if any(np.isinf(weights)):
             return None
+        state = {'class': self.net.__class__.__name__, 'weights': weights}
         state.update(kwargs)
         return state
 
@@ -176,6 +192,16 @@ class NeuralNetwork(PrintingObject):
             self.states += [state]
         else:
             pass
+
+    def update_state(self, number, **kwargs):
+        raise NotImplementedError('Result is vague')
+        if number < len(self.states):
+            self.states[number] = self.make_state(**kwargs)
+        else:
+            for i in range(len(self.states), number):
+                self.states += [None]
+            self.states += self.make_state(**kwargs)
+
     def get_states(self):
         return self.states
 
@@ -250,7 +276,7 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
 
     def compute_samples(self):
         samples = []
-        for normal_weight_point in self.__class__.compute_all_normal_weight_points(self.get_weights()):
+        for normal_weight_point in self.compute_all_normal_weight_points(self.get_weights()):
             weight, normal_layer_id, normal_cell_id, normal_weight_id = normal_weight_point
 
             sample = np.transpose(np.array([[weight], [normal_layer_id], [normal_cell_id], [normal_weight_id]]))
@@ -374,7 +400,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
 
     def get_collected_weights(self):
         collection_size = self.get_amount_of_weights() // self.aggregates
-        return self.__class__.collect_weights(self.get_weights(), collection_size)
+        return self.collect_weights(self.get_weights(), collection_size)
 
     def get_aggregated_weights(self):
         collections, leftovers = self.get_collected_weights()
@@ -463,7 +489,7 @@ class FFTNeuralNetwork(NeuralNetwork):
 
     def apply_to_weights(self, old_weights):
         # build aggregations from old_weights
-        weights = self.get_weights()
+        weights = self.get_weights_flat()
 
         # call network
         old_aggregation = self.aggregate_fft(weights, self.aggregates)
@@ -544,59 +570,6 @@ class RecurrentNeuralNetwork(NeuralNetwork):
         return sample, sample
 
 
-class LearningNeuralNetwork(NeuralNetwork):
-
-    @staticmethod
-    def mean_reduction(weights, features):
-        single_dim_weights = np.hstack([w.flatten() for w in weights])
-        shaped_weights = np.reshape(single_dim_weights, (1, features, -1))
-        x = np.mean(shaped_weights, axis=-1)
-        return x
-
-    @staticmethod
-    def fft_reduction(weights, features):
-        single_dim_weights = np.hstack([w.flatten() for w in weights])
-        x = np.fft.fft(single_dim_weights, n=features)[None, ...]
-        return x
-
-    @staticmethod
-    def random_reduction(_, features):
-        x = np.random.rand(features)[None, ...]
-        return x
-
-    def __init__(self, width, depth, features, **kwargs):
-        super().__init__(**kwargs)
-        self.width = width
-        self.depth = depth
-        self.features = features
-        self.compile_params = dict(loss='mse', optimizer='sgd')
-        self.model = Sequential()
-        self.model.add(Dense(units=self.width, input_dim=self.features, **self.keras_params))
-        for _ in range(self.depth-1):
-            self.model.add(Dense(units=self.width, **self.keras_params))
-        self.model.add(Dense(units=self.features, **self.keras_params))
-        self.model.compile(**self.compile_params)
-
-    def apply_to_weights(self, old_weights):
-        raise NotImplementedError
-
-    def with_compile_params(self, **kwargs):
-        self.compile_params.update(kwargs)
-        return self
-
-    def learn(self, epochs, reduction, batchsize=1):
-        with tqdm(total=epochs, ascii=True,
-                  desc='Type: {t} @ Epoch:'.format(t=self.__class__.__name__),
-                  postfix=["Loss", dict(value=0)]) as bar:
-            for epoch in range(epochs):
-                old_weights = self.get_weights()
-                x = reduction(old_weights, self.features)
-                savestateCallback = SaveStateCallback(self, epoch=epoch)
-                history = self.model.fit(x=x, y=x, verbose=0, batch_size=batchsize, callbacks=savestateCallback)
-                bar.postfix[1]["value"] = history.history['loss'][-1]
-                bar.update()
-
-
 class TrainingNeuralNetworkDecorator():
 
     def __init__(self, net, **kwargs):
@@ -637,7 +610,7 @@ class TrainingNeuralNetworkDecorator():
         self.compiled()
         x, y = self.net.compute_samples()
         savestatecallback = SaveStateCallback(net=self.net, epoch=epoch) if store_states else None
-        history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize, callbacks=[savestatecallback])
+        history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize, callbacks=[savestatecallback], initial_epoch=epoch)
         return history.history['loss'][-1]
 
     def train_other(self, other_network, batchsize=1):
@@ -650,52 +623,56 @@ class TrainingNeuralNetworkDecorator():
 
 
 if __name__ == '__main__':
+    def run_exp(net, prints=False):
+        # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
+        exp.run_net(net, 100, run_id=run_id + 1)
+        exp.historical_particles[run_id] = net
+        if prints:
+            # print(net.apply_to_network(net))
+            print("Fixpoint? " + str(net.is_fixpoint()))
+            print("Loss " + str(loss))
+        K.clear_session()
+
     if False:
+        # WeightWise Neural Network
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(100)):
-                # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')
-                # net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2)\
-                net = FFTNeuralNetwork(aggregates=4, width=2, depth=2) \
-                    .with_params(print_all_weight_updates=False, use_bias=False)
-                # net = RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear')\
-                # .with_params(print_all_weight_updates=True)
-                # net.print_weights()
-
-                # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
-                exp.run_net(net, 100, run_id=run_id+1)
-                exp.historical_particles[run_id] = net
+                net = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2) \
+                                        .with_keras_params(activation='linear'))
+                run_exp(net)
             exp.log(exp.counters)
-    if False:
-        # TODO SI: Ich muss noch apply to weights implementieren
-        # is_fixpoint was wrong because it trivially returned the old weights
-        with IdentLearningExperiment() as exp:
-            net = LearningNeuralNetwork(width=2, depth=2, features=2, )\
-                .with_keras_params(activation='sigmoid', use_bias=False, ) \
-                .with_params(print_all_weight_updates=False)
-            net.print_weights()
-            time.sleep(0.1)
-            print(net.is_fixpoint(epsilon=0.1e-6))
-            net.learn(1, reduction=LearningNeuralNetwork.fft_reduction)
-            print(net.is_fixpoint(epsilon=0.1e-6))
 
     if False:
+        # Aggregating Neural Network
+        with FixpointExperiment() as exp:
+            for run_id in tqdm(range(100)):
+                net = ParticleDecorator(AggregatingNeuralNetwork(aggregates=4, width=2, depth=2) \
+                                        .with_keras_params())
+                run_exp(net)
+            exp.log(exp.counters)
+
+    if False:
+        #FFT Neural Network
+        with FixpointExperiment() as exp:
+            for run_id in tqdm(range(100)):
+                net = ParticleDecorator(FFTNeuralNetwork(aggregates=4, width=2, depth=2) \
+                                        .with_keras_params(activation='linear'))
+                run_exp(net)
+            exp.log(exp.counters)
+
+    if True:
         # ok so this works quite realiably
         with FixpointExperiment() as exp:
             for i in range(1):
-
                 run_count = 1000
-                net = TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2))\
-                    .with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
+                net = ParticleDecorator(TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2)))
+                net.with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
                 for run_id in tqdm(range(run_count+1)):
-                    loss = net.compiled().train(epoch=run_id)
+                    net.compiled()
+                    loss = net.train(epoch=run_id)
                     if run_id % 100 == 0:
-                        net.print_weights()
-                        # print(net.apply_to_network(net))
-                        print("Fixpoint? " + str(net.is_fixpoint()))
-                        print("Loss " + str(loss))
-                        print()
-                exp.historical_particles[i] = net
-                K.clear_session()
+                        run_exp(net)
+
     if False:
         # this does not work as the aggregation function screws over the fixpoint computation....
         # TODO: check for fixpoint in aggregated space...
