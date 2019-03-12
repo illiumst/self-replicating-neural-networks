@@ -1,6 +1,7 @@
 import sys
+import os
 
-sys.path += ['../', './']
+from typing import Tuple
 
 from util import *
 from experiment import *
@@ -9,10 +10,32 @@ from network import *
 import keras.backend
 
 
+# Concat top Level dir to system environmental variables
+sys.path += os.path.join('..', '.')
+
+
 def generate_counters():
+    """
+    Initial build of the counter dict, to store counts.
+
+    :rtype: dict
+    :return: dictionary holding counter for: 'divergent', 'fix_zero', 'fix_sec', 'other'
+    """
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
+
 def count(counters, net, notable_nets=[]):
+    """
+    Count the occurences ot the types of weight trajectories.
+
+    :param counters:      A counter dictionary.
+    :param net:           A Neural Network
+    :param notable_nets:  A list to store and save intersting candidates
+
+    :rtype      Tuple[dict, list]
+    :return:    Both the counter dictionary and the list of interessting nets.
+    """
+
     if net.is_diverged():
         counters['divergent'] += 1
     elif net.is_fixpoint():
@@ -27,6 +50,7 @@ def count(counters, net, notable_nets=[]):
     else:
         counters['other'] += 1
     return counters, notable_nets
+
 
 with Experiment('training_fixpoint') as exp:
     exp.trials = 20

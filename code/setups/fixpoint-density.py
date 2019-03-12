@@ -1,6 +1,7 @@
 import sys
-
-sys.path += ['../', './']
+import os
+# Concat top Level dir to system environmental variables
+sys.path += os.path.join('..', '.')
 
 from util import *
 from experiment import *
@@ -26,7 +27,7 @@ def count(counters, net, notable_nets=[]):
     return counters, notable_nets
 
 with Experiment('fixpoint-density') as exp:
-    exp.trials = 1000
+    exp.trials = 100
     exp.epsilon = 1e-4
     net_generators = []
     for activation in ['linear', 'sigmoid', 'relu']:
@@ -43,6 +44,7 @@ with Experiment('fixpoint-density') as exp:
             net = net_generator().with_params(epsilon=exp.epsilon)
             name = str(net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias='" + str(net.get_keras_params().get('use_bias')) + "'"
             count(counters, net, notable_nets)
+            K.clear_session()
         all_counters += [counters]
         all_notable_nets += [notable_nets]
         all_names += [name]
@@ -53,3 +55,5 @@ with Experiment('fixpoint-density') as exp:
         exp.log(all_names[exp_id])
         exp.log(all_counters[exp_id])
         exp.log('\n')
+
+print('Done')
