@@ -8,6 +8,8 @@ from util import *
 from experiment import *
 from network import *
 
+import keras.backend
+
 def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
@@ -49,12 +51,13 @@ with Experiment('training_fixpoint') as exp:
             for run_id in range(exp.run_count):
                 loss = net.compiled().train(epoch=run_id+1)
             count(counters, net, notable_nets)
+            keras.backend.clear_session()
         all_counters += [counters]
         all_notable_nets += [notable_nets]
         all_names += [name]
-    exp.save(all_counters=all_counters)
+    exp.save(all_counters=all_counters) #net types reached in the end
     exp.save(all_notable_nets=all_notable_nets)
-    exp.save(all_names=all_names)
+    exp.save(all_names=all_names) #experiment setups
     for exp_id, counter in enumerate(all_counters):
         exp.log(all_names[exp_id])
         exp.log(all_counters[exp_id])

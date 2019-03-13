@@ -609,11 +609,11 @@ class TrainingNeuralNetworkDecorator():
     def train(self, batchsize=1, store_states=True, epoch=0):
         self.compiled()
         x, y = self.net.compute_samples()
-        savestatecallback = SaveStateCallback(net=self.net, epoch=epoch) if store_states else None
-        history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize, callbacks=[savestatecallback], initial_epoch=epoch)
+        savestatecallback = SaveStateCallback(net=self, epoch=epoch) if store_states else None
+        history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize, callbacks=[savestatecallback] if store_states else None, initial_epoch=epoch)
         return history.history['loss'][-1]
 
-    def train_other(self, other_network, batchsize=1):
+    def learn_from(self, other_network, batchsize=1):
         self.compiled()
         other_network.compiled()
         x, y = other_network.net.compute_samples()

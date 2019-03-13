@@ -7,6 +7,8 @@ from util import *
 from experiment import *
 from network import *
 
+import keras.backend
+
 def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
@@ -44,7 +46,7 @@ with Experiment('fixpoint-density') as exp:
             net = net_generator().with_params(epsilon=exp.epsilon)
             name = str(net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias='" + str(net.get_keras_params().get('use_bias')) + "'"
             count(counters, net, notable_nets)
-            K.clear_session()
+            keras.backend.clear_session()
         all_counters += [counters]
         all_notable_nets += [notable_nets]
         all_names += [name]

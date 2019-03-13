@@ -14,7 +14,7 @@ class Soup(object):
         self.generator = generator
         self.particles = []
         self.historical_particles = {}
-        self.params = dict(attacking_rate=0.1, train_other_rate=0.1, train=0)
+        self.params = dict(attacking_rate=0.1, learn_from_rate=0.1, train=0, learn_from_severity=1)
         self.params.update(kwargs)
         self.time = 0
 
@@ -59,14 +59,16 @@ class Soup(object):
                     particle.attack(other_particle)
                     description['action'] = 'attacking'
                     description['counterpart'] = other_particle.get_uid()
-                if prng() < self.params.get('train_other_rate') and hasattr(self, 'train_other'):
+                if prng() < self.params.get('learn_from_rate'):
                     other_particle_id = int(prng() * len(self.particles))
                     other_particle = self.particles[other_particle_id]
-                    particle.train_other(other_particle)
-                    description['action'] = 'train_other'
+                    for _ in range(self.params.get('learn_from_severity', 1)):
+                        particle.learn_from(other_particle)
+                    description['action'] = 'learn_from'
                     description['counterpart'] = other_particle.get_uid()
                 for _ in range(self.params.get('train', 0)):
-                    loss = particle.compiled().train()
+                    particle.compiled()
+                    loss = particle.train(store_states=False) #callbacks on save_state are broken for TrainingNeuralNetwork
                     description['fitted'] = self.params.get('train', 0)
                     description['loss'] = loss
                     description['action'] = 'train_self'

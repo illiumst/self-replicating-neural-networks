@@ -11,6 +11,9 @@ from experiment import *
 from network import *
 from soup import prng
 
+import keras.backend
+
+
 from statistics import mean
 avg = mean
     
@@ -70,8 +73,9 @@ with Experiment('known-fixpoint-variation') as exp:
                     still_fixpoint = False
                 time_to_something += 1
             exp.xs += [current_scale]
-            exp.ys += [time_to_something]
-            exp.zs += [time_as_fixpoint]
+            exp.ys += [time_to_something] #time steps taken to reach divergence or zero (reaching another fix-point is basically never happening)
+            exp.zs += [time_as_fixpoint] #time steps still regarded as sthe initial fix-point
+            keras.backend.clear_session()
         current_scale /= 10.0
     for d in range(exp.depth):
         exp.log('variation 10e-' + str(d))
