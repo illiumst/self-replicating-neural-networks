@@ -25,32 +25,27 @@ def build_args():
     return arg_parser.parse_args()
 
 
-def plot_histogram(bars_dict_list: List[dict], filename='histogram_plot'):
+def plot_bars(names_bars_tuple, filename='histogram_plot'):
     # catagorical
     ryb = cl.scales['10']['div']['RdYlBu']
+    names, bars = names_bars_tuple
+    data_dict = {}
+    for idx, name in enumerate(names):
+        data_dict[name] = bars[idx]
 
     data = []
 
-    if bars_dict_list:
-        keys = bars_dict_list[0].keys()
-        keyDict = defaultdict(list)
-    else:
-        raise IOError('This List is empty, is this intended?')
-
-    for key in keys:
-        keyDict[key] = np.mean([bars_dict[key] for bars_dict in bars_dict_list])
-
-    hist = go.Bar(
-        y=[keyDict.get(key, 0) for key in keys],
-        x=[key for key in keys],
-        showlegend=False,
-        marker=dict(
-            color=[ryb[bar_id] for bar_id in range(len(keys))]
-        ),
-    )
-    data.append(hist)
+    for idx, name in enumerate(data_dict.keys()):
+        bar = go.Bar(
+            y=[val for val in data_dict[name].values()],
+            x=[key for key in data_dict[name].keys()],
+            name=name,
+            showlegend=True,
+        )
+        data.append(bar)
 
     layout = dict(title='{} Histogram Plot'.format('Experiment Name Penis'),
+                  barmode='stack'
                   # height=400, width=400,
                   # margin=dict(l=20, r=20, t=20, b=20)
                   )
@@ -72,9 +67,13 @@ def search_and_apply(absolut_file_or_folder, plotting_function, files_to_look_fo
                   )
 
             with open(absolut_file_or_folder, 'rb') as in_f:
-                exp = dill.load(in_f)
+                bars = dill.load(in_f)
 
-            plotting_function(exp, filename='{}.html'.format(absolut_file_or_folder[:-5]))
+            names_dill_location = os.path.join(*os.path.split(absolut_file_or_folder)[:-1], 'all_names.dill')
+            with open(names_dill_location, 'rb') as in_f:
+                names = dill.load(in_f)
+
+            plotting_function((names, bars), filename='{}.html'.format(absolut_file_or_folder[:-5]))
 
         else:
             pass
@@ -89,5 +88,5 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_histogram, files_to_look_for=['all_counters.dill'])
+    search_and_apply(in_file, plot_bars, files_to_look_for=['all_counters.dill'])
     # , 'all_names.dill', 'all_notable_nets.dill'])
