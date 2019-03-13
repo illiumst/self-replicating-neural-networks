@@ -180,7 +180,7 @@ class ParticleDecorator:
 
     def make_state(self, **kwargs):
         weights = self.net.get_weights_flat()
-        if any(np.isinf(weights)):
+        if any(np.isinf(weights)) or any(np.isnan(weights)):
             return None
         state = {'class': self.net.__class__.__name__, 'weights': weights}
         state.update(kwargs)
@@ -609,8 +609,8 @@ class TrainingNeuralNetworkDecorator():
     def train(self, batchsize=1, store_states=True, epoch=0):
         self.compiled()
         x, y = self.net.compute_samples()
-        savestatecallback = SaveStateCallback(net=self, epoch=epoch) if store_states else None
-        history = self.net.model.fit(x=x, y=y, verbose=0, batch_size=batchsize, callbacks=[savestatecallback] if store_states else None, initial_epoch=epoch)
+        savestatecallback = [SaveStateCallback(net=self, epoch=epoch)] if store_states else None
+        history = self.net.model.fit(x=x, y=y, epochs=epoch+1, verbose=0, batch_size=batchsize, callbacks=savestatecallback, initial_epoch=epoch)
         return history.history['loss'][-1]
 
     def learn_from(self, other_network, batchsize=1):
@@ -628,36 +628,37 @@ if __name__ == '__main__':
         exp.run_net(net, 100, run_id=run_id + 1)
         exp.historical_particles[run_id] = net
         if prints:
-            # print(net.apply_to_network(net))
             print("Fixpoint? " + str(net.is_fixpoint()))
             print("Loss " + str(loss))
-        K.clear_session()
 
-    if False:
+    if True:
         # WeightWise Neural Network
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(100)):
                 net = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2) \
                                         .with_keras_params(activation='linear'))
                 run_exp(net)
+                K.clear_session()
             exp.log(exp.counters)
 
-    if False:
+    if True:
         # Aggregating Neural Network
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(100)):
                 net = ParticleDecorator(AggregatingNeuralNetwork(aggregates=4, width=2, depth=2) \
                                         .with_keras_params())
                 run_exp(net)
+                K.clear_session()
             exp.log(exp.counters)
 
-    if False:
+    if True:
         #FFT Neural Network
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(100)):
                 net = ParticleDecorator(FFTNeuralNetwork(aggregates=4, width=2, depth=2) \
                                         .with_keras_params(activation='linear'))
                 run_exp(net)
+                K.clear_session()
             exp.log(exp.counters)
 
     if True:
@@ -665,13 +666,14 @@ if __name__ == '__main__':
         with FixpointExperiment() as exp:
             for i in range(1):
                 run_count = 1000
-                net = ParticleDecorator(TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(width=2, depth=2)))
+                net = TrainingNeuralNetworkDecorator(ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)))
                 net.with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
                 for run_id in tqdm(range(run_count+1)):
                     net.compiled()
                     loss = net.train(epoch=run_id)
                     if run_id % 100 == 0:
                         run_exp(net)
+                K.clear_session()
 
     if False:
         with FixpointExperiment() as exp:
@@ -689,6 +691,7 @@ if __name__ == '__main__':
                     print("Fixpoint after Agg? " + str(fp))
                     print("Loss " + str(loss))
                     print()
+
     if False:
         # this explodes in our faces completely... NAN everywhere
         # TODO: Wtf is happening here?

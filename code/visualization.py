@@ -34,6 +34,8 @@ def build_from_soup_or_exp(soup):
             action=[event.get('action', None) for event in particle],
             counterpart=[event.get('counterpart', None) for event in particle]
         )
+        if any([x is not None for x in particle_dict['counterpart']]):
+            print('counterpart')
         particle_list.append(particle_dict)
     return particle_list
 

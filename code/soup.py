@@ -68,7 +68,8 @@ class Soup(object):
                     description['counterpart'] = other_particle.get_uid()
                 for _ in range(self.params.get('train', 0)):
                     particle.compiled()
-                    loss = particle.train(store_states=False) #callbacks on save_state are broken for TrainingNeuralNetwork
+                    # callbacks on save_state are broken for TrainingNeuralNetwork
+                    loss = particle.train(store_states=False)
                     description['fitted'] = self.params.get('train', 0)
                     description['loss'] = loss
                     description['action'] = 'train_self'

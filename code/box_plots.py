@@ -25,37 +25,58 @@ def build_args():
     return arg_parser.parse_args()
 
 
-def plot_histogram(bars_dict_list: List[dict], filename='histogram_plot'):
+def plot_box(exp: Experiment, filename='histogram_plot'):
     # catagorical
     ryb = cl.scales['10']['div']['RdYlBu']
 
     data = []
 
-    if bars_dict_list:
-        keys = bars_dict_list[0].keys()
-        keyDict = defaultdict(list)
-    else:
-        raise IOError('This List is empty, is this intended?')
+    for d in range(exp.depth):
+        names = ['D 10e-{}'.format(d)] * exp.trials
+        data.extend(names)
 
-    for key in keys:
-        keyDict[key] = np.mean([bars_dict[key] for bars_dict in bars_dict_list])
+    trace_list = []
 
-    hist = go.Bar(
-        y=[keyDict.get(key, 0) for key in keys],
-        x=[key for key in keys],
-        showlegend=False,
+    vergence_box = go.Box(
+        y=exp.ys,
+        x=data,
+        name='Time to Vergence',
+        boxpoints=False,
+        showlegend=True,
         marker=dict(
-            color=[ryb[bar_id] for bar_id in range(len(keys))]
+            color=ryb[3]
         ),
     )
-    data.append(hist)
+    fixpoint_box = go.Box(
+        y=exp.zs,
+        x=data,
+        name='Time as Fixpoint',
+        boxpoints=False,
+        showlegend=True,
+        marker=dict(
+            color=ryb[-1]
+        ),
+    )
+
+    trace_list.extend([vergence_box, fixpoint_box])
 
     layout = dict(title='{} Histogram Plot'.format('Experiment Name Penis'),
+                  boxmode='group',
+                  boxgap=0,
+                  # barmode='group',
+                  bargap=0,
+                  xaxis=dict(showgrid=False,
+                             zeroline=True,
+                             tickangle=0,
+                             showticklabels=True),
+                  yaxis=dict(
+                      title='Occurences',
+                      zeroline=False)
                   # height=400, width=400,
                   # margin=dict(l=20, r=20, t=20, b=20)
                   )
 
-    fig = go.Figure(data=data, layout=layout)
+    fig = go.Figure(data=trace_list, layout=layout)
     pl.offline.plot(fig, auto_open=True, filename=filename)
     pass
 
@@ -89,5 +110,5 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_histogram, files_to_look_for=['all_counters.dill'])
+    search_and_apply(in_file, plot_box, files_to_look_for=['experiment.dill'])
     # , 'all_names.dill', 'all_notable_nets.dill'])
