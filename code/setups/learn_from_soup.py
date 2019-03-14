@@ -61,15 +61,15 @@ def count(counters, soup, notable_nets=[]):
 
 with SoupExperiment('learn-from-soup') as exp:
     exp.soup_size = 10
-    exp.soup_life = 1000
-    exp.trials = 20
+    exp.soup_life = 100
+    exp.trials = 10
     exp.learn_from_severity_values = [10 * i for i in range(11)]
     exp.epsilon = 1e-4
     net_generators = []
     for activation in ['sigmoid']: #['linear', 'sigmoid', 'relu']:
         for use_bias in [False]:
             net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-            net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+            # net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
             # net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
 
     all_names = []

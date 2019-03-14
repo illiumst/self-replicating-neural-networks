@@ -54,7 +54,7 @@ def count(counters, soup, notable_nets=[]):
 
 
 with Experiment('mixed-self-fixpoints') as exp:
-    exp.trials = 100
+    exp.trials = 10
     exp.soup_size = 10
     exp.soup_life = 5
     exp.trains_per_selfattack_values = [10 * i for i in range(11)]
