@@ -232,23 +232,27 @@ def line_plot(line_dict_list, filename='lineplot'):
     pass
 
 
-def search_and_apply(file_or_folder, plotting_function):
-    if os.path.isdir(file_or_folder):
-        for sub_file_or_folder in os.scandir(file_or_folder):
-            search_and_apply(sub_file_or_folder.path, plotting_function)
-    elif file_or_folder.endswith('.dill') and not os.path.exists('{}.html'.format(file_or_folder[:-5])):
-        print('Apply Plotting function "{func}" on file "{file}"'.format(func=plotting_function.__name__,
-                                                                         file=file_or_folder)
-              )
-        with open(file_or_folder, 'rb') as in_f:
-            exp = dill.load(in_f)
-
-        plotting_function(exp, filename='{}.html'.format(file_or_folder[:-5]))
-    else:
-        # This was either another FilyType or Plot.html alerady exists.
-        pass
-
-
+def search_and_apply(absolut_file_or_folder, plotting_function, files_to_look_for=[]):
+    if os.path.isdir(absolut_file_or_folder):
+        for sub_file_or_folder in os.scandir(absolut_file_or_folder):
+            search_and_apply(sub_file_or_folder.path, plotting_function, files_to_look_for=files_to_look_for)
+    elif absolut_file_or_folder.endswith('.dill'):
+        file_or_folder = os.path.split(absolut_file_or_folder)[-1]
+        if file_or_folder in files_to_look_for and not os.path.exists('{}.html'.format(file_or_folder[:-5])):
+            print('Apply Plotting function "{func}" on file "{file}"'.format(func=plotting_function.__name__,
+                                                                             file=absolut_file_or_folder)
+                  )
+            with open(absolut_file_or_folder, 'rb') as in_f:
+                exp = dill.load(in_f)
+            try:
+                plotting_function(exp, filename='{}.html'.format(absolut_file_or_folder[:-5]))
+            except ValueError:
+                pass
+            except AttributeError:
+                pass
+        else:
+            # This was either another FilyType or Plot.html alerady exists.
+            pass
 
 
 if __name__ == '__main__':
@@ -256,4 +260,4 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_latent_trajectories_3D)
+    search_and_apply(in_file, plot_latent_trajectories_3D, ["experiment.dill"])
