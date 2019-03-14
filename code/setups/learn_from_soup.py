@@ -61,15 +61,15 @@ def count(counters, soup, notable_nets=[]):
 
 with SoupExperiment('learn-from-soup') as exp:
     exp.soup_size = 10
-    exp.soup_life = 100
-    exp.trials = 10
+    exp.soup_life = 1000
+    exp.trials = 20
     exp.learn_from_severity_values = [10 * i for i in range(11)]
     exp.epsilon = 1e-4
     net_generators = []
     for activation in ['sigmoid']: #['linear', 'sigmoid', 'relu']:
         for use_bias in [False]:
             net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-            # net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+            net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
             # net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
 
     all_names = []
@@ -95,7 +95,10 @@ with SoupExperiment('learn-from-soup') as exp:
             ys += [float(counters['fix_zero']) / float(exp.trials)]
             zs += [float(counters['fix_other']) / float(exp.trials)]        
         all_names += [name]
-        all_data += [{'xs':xs, 'ys':ys, 'zs':zs}] #xs: learn_from_intensity according to exp.learn_from_intensity_values, ys: zero-fixpoints after life time, zs: non-zero-fixpoints after life time
+        # xs: learn_from_intensity according to exp.learn_from_intensity_values
+        # ys: zero-fixpoints after life time
+        # zs: non-zero-fixpoints after life time
+        all_data += [{'xs':xs, 'ys':ys, 'zs':zs}]
 
     exp.save(all_names=all_names)
     exp.save(all_data=all_data)

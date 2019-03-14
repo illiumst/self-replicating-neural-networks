@@ -37,7 +37,7 @@ if __name__ == '__main__':
         for activation in ['linear', 'sigmoid', 'relu']:
             net_generators += [lambda activation=activation: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
             net_generators += [lambda activation=activation: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-            net_generators += [lambda activation=activation: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+            # net_generators += [lambda activation=activation: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
             # net_generators += [lambda activation=activation: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
         all_counters = []
         all_notable_nets = []
@@ -52,7 +52,7 @@ if __name__ == '__main__':
                 count(counters, net, notable_nets)
                 keras.backend.clear_session()
             all_counters += [counters]
-            all_notable_nets += [notable_nets]
+            # all_notable_nets += [notable_nets]
             all_names += [name]
         exp.save(all_counters=all_counters)
         exp.save(all_notable_nets=all_notable_nets)

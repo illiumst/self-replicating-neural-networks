@@ -1,6 +1,7 @@
 import sys
 import os
 
+# Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
 from typing import Tuple
@@ -11,10 +12,6 @@ from network import *
 from soup import *
 
 import keras.backend
-
-
-# Concat top Level dir to system environmental variables
-sys.path += os.path.join('..', '.')
 
 
 def generate_counters():
@@ -57,7 +54,7 @@ def count(counters, soup, notable_nets=[]):
 
 
 with Experiment('mixed-self-fixpoints') as exp:
-    exp.trials = 10
+    exp.trials = 100
     exp.soup_size = 10
     exp.soup_life = 5
     exp.trains_per_selfattack_values = [10 * i for i in range(11)]
@@ -91,7 +88,10 @@ with Experiment('mixed-self-fixpoints') as exp:
             ys += [float(counters['fix_zero']) / float(exp.trials)]
             zs += [float(counters['fix_other']) / float(exp.trials)]
         all_names += [name]
-        all_data += [{'xs':xs, 'ys':ys, 'zs':zs}] #xs: how many trains per self-attack from exp.trains_per_selfattack_values, ys: average amount of zero-fixpoints found, zs: average amount of non-zero fixpoints
+        # xs: how many trains per self-attack from exp.trains_per_selfattack_values
+        # ys: average amount of zero-fixpoints found
+        # zs: average amount of non-zero fixpoints
+        all_data += [{'xs':xs, 'ys':ys, 'zs':zs}]
 
     exp.save(all_names=all_names)
     exp.save(all_data=all_data)
