@@ -92,5 +92,5 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_bars, files_to_look_for=['all_data.dill'])
+    search_and_apply(in_file, plot_bars, files_to_look_for=['all_counters.dill'])
     # , 'all_names.dill', 'all_notable_nets.dill'])

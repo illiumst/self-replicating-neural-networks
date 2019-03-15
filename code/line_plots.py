@@ -28,26 +28,35 @@ def line_plot(names_exp_tuple, filename='lineplot'):
 
     names, line_dict_list = names_exp_tuple
 
-    names = ['Weightwise', 'Aggregating', 'Recurrent']
+    names = ['Weightwise', 'Aggregating']
 
     data = []
     base_scale = cl.scales['10']['div']['RdYlGn']
     scale = cl.interp(base_scale, len(line_dict_list) + 1)  # Map color scale to N bins
     for ld_id, line_dict in enumerate(line_dict_list):
-        trace = go.Scatter(
-            x=line_dict['xs'],
-            y=line_dict['ys'],
-            name=names[ld_id],
-            line=dict(color=scale[ld_id],
-                      width=5),
-        )
+        for data_point in ['ys', 'zs']:
+            trace = go.Scatter(
+                x=line_dict['xs'],
+                y=line_dict[data_point],
+                name='{} {}zero-fixpoints'.format(names[ld_id], 'non-' if data_point == 'zs' else ''),
+                line=dict(
+                    # color=scale[ld_id],
+                    width=5,
+                    # dash='dash' if data_point == 'ys' else ''
+                ),
+            )
 
-        data.append(trace)
+            data.append(trace)
 
-    layout = dict(xaxis=dict(title='Trains per self-attack', titlefont=dict(size=20)),
-                  yaxis=dict(title='Average amount of fixpoints found', titlefont=dict(size=20)),
-                  legend=dict(orientation='h', x=0.2)
-                  # height=800, width=800, margin=dict(l=0, r=0, t=0, b=0)
+    layout = dict(xaxis=dict(title='Trains per self-application', titlefont=dict(size=20)),
+                  yaxis=dict(title='Average amount of fixpoints found',
+                             titlefont=dict(size=20),
+                             # type='log',
+                             # range=[0, 2]
+                             ),
+                  legend=dict(orientation='h', x=0.3, y=-0.3),
+                  # height=800, width=800,
+                  margin=dict(b=0)
                   )
 
     fig = go.Figure(data=data, layout=layout)

@@ -32,7 +32,7 @@ def count(counters, net, notable_nets=[]):
 
 if __name__ == '__main__':
 
-    with Experiment('training_fixpoint') as exp:
+    with Experiment('applying_fixpoint') as exp:
         exp.trials = 50
         exp.run_count = 100
         exp.epsilon = 1e-4
