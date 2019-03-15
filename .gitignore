@@ -568,3 +568,5 @@ TSWLatexianTemp*
 
 
 # End of https://www.gitignore.io/api/data,linux,macos,python,windows,pycharm,database,jupyternotebook
+code/old_experiments
+experiments
