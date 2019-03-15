@@ -33,15 +33,15 @@ def count(counters, net, notable_nets=[]):
 if __name__ == '__main__':
 
     with Experiment('training_fixpoint') as exp:
-        exp.trials = 20
-        exp.run_count = 500
+        exp.trials = 50
+        exp.run_count = 1000
         exp.epsilon = 1e-4
         net_generators = []
         for activation in ['linear']:  # , 'sigmoid', 'relu']:
             for use_bias in [False]:
-                # net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
                 net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                # net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
         all_counters = []
         all_notable_nets = []
         all_names = []

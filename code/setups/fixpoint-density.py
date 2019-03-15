@@ -31,14 +31,16 @@ def count(counters, net, notable_nets=[]):
 
 if __name__ == '__main__':
     with Experiment('fixpoint-density') as exp:
-        exp.trials = 100
+        #NOTE: settings could/should stay this way
+        #FFT doesn't work though
+        exp.trials = 100000
         exp.epsilon = 1e-4
         net_generators = []
         for activation in ['linear', 'sigmoid', 'relu']:
-            # net_generators += [lambda activation=activation: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+            net_generators += [lambda activation=activation: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
             net_generators += [lambda activation=activation: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-            # net_generators += [lambda activation=activation: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-            # net_generators += [lambda activation=activation: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+            #net_generators += [lambda activation=activation: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+            net_generators += [lambda activation=activation: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
         all_counters = []
         all_notable_nets = []
         all_names = []

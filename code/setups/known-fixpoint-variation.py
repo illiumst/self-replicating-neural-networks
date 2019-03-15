@@ -26,8 +26,9 @@ def generate_fixpoint_weights():
 
 
 def generate_fixpoint_net():
-    # net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='sigmoid')
-    net = AggregatingNeuralNetwork(width=2, depth=2).with_keras_params(activation='sigmoid')
+    #NOTE: Weightwise only is all we can do right now IMO
+    net = WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='sigmoid')
+    # net = AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation='sigmoid') # I don't know if this work for aggregaeting. We don't actually need it, though.
     net.set_weights(generate_fixpoint_weights())
     return net
 
