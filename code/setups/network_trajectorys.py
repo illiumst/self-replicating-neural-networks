@@ -19,19 +19,18 @@ if __name__ == '__main__':
 
     if True:
         # WeightWise Neural Network
-        for _ in range(10):
-            with FixpointExperiment() as exp:
-                for run_id in tqdm(range(20)):
-                    net = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)
-                                            .with_keras_params(activation='linear'))
-                    run_exp(net)
-                    K.clear_session()
-                exp.log(exp.counters)
-                exp.save(trajectorys=exp.without_particles())
+        with FixpointExperiment(name="weightwise_self_application") as exp:
+            for run_id in tqdm(range(20)):
+                net = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)
+                                        .with_keras_params(activation='linear'))
+                run_exp(net)
+                K.clear_session()
+            exp.log(exp.counters)
+            exp.save(trajectorys=exp.without_particles())
 
     if False:
         # Aggregating Neural Network
-        with FixpointExperiment() as exp:
+        with FixpointExperiment(name="aggregating_self_application") as exp:
             for run_id in tqdm(range(10)):
                 net = ParticleDecorator(AggregatingNeuralNetwork(aggregates=4, width=2, depth=2)
                                         .with_keras_params(activation='linear'))
@@ -53,31 +52,33 @@ if __name__ == '__main__':
 
     if False:
         # ok so this works quite realiably
-        with FixpointExperiment() as exp:
+        with FixpointExperiment(name="weightwise_learning") as exp:
             for i in range(10):
                 run_count = 100
                 net = TrainingNeuralNetworkDecorator(ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)))
                 net.with_params(epsilon=0.0001).with_keras_params(activation='linear')
+                exp.historical_particles[net.get_uid()] = net
                 for run_id in tqdm(range(run_count+1)):
                     net.compiled()
                     loss = net.train(epoch=run_id)
-                    if run_id % 10 == 0:
-                        run_exp(net)
+                    # run_exp(net)
+                    # net.save_state(time=run_id)
                 K.clear_session()
             exp.save(trajectorys=exp.without_particles())
 
     if False:
         # ok so this works quite realiably
-        with FixpointExperiment() as exp:
+        with FixpointExperiment(name="aggregating_learning") as exp:
             for i in range(10):
                 run_count = 100
                 net = TrainingNeuralNetworkDecorator(ParticleDecorator(AggregatingNeuralNetwork(4, width=2, depth=2)))
                 net.with_params(epsilon=0.0001).with_keras_params(activation='linear')
+                exp.historical_particles[net.get_uid()] = net
                 for run_id in tqdm(range(run_count+1)):
                     net.compiled()
                     loss = net.train(epoch=run_id)
-                    if run_id % 10 == 0:
-                        run_exp(net)
+                    # run_exp(net)
+                    # net.save_state(time=run_id)
                 K.clear_session()
             exp.save(trajectorys=exp.without_particles())
 

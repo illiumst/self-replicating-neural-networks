@@ -55,15 +55,15 @@ if __name__ == '__main__':
     with Experiment('mixed-self-fixpoints') as exp:
         exp.trials = 20
         exp.selfattacks = 4
-        exp.trains_per_selfattack_values = [100 * i for i in range(11)]
+        exp.trains_per_selfattack_values = [50 * i for i in range(11)]
         exp.epsilon = 1e-4
         net_generators = []
         for activation in ['linear']:  # , 'sigmoid', 'relu']:
             for use_bias in [False]:
                 net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                # net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
                 # net_generators += [lambda activation=activation, use_bias=use_bias: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                # net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
 
         all_names = []
         all_data = []
@@ -77,7 +77,7 @@ if __name__ == '__main__':
                 for _ in tqdm(range(exp.trials)):
                     net = ParticleDecorator(net_generator())
                     net = TrainingNeuralNetworkDecorator(net).with_params(epsilon=exp.epsilon)
-                    name = str(net.net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
+                    name = str(net.net.net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
                     for selfattack_id in range(exp.selfattacks):
                         net.self_attack()
                         for train_id in range(trains_per_selfattack):

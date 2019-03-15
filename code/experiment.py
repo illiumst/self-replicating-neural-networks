@@ -62,7 +62,8 @@ class Experiment:
 class FixpointExperiment(Experiment):
 
     def __init__(self, **kwargs):
-        super().__init__(name=self.__class__.__name__, **kwargs)
+        kwargs['name'] =  self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
+        super().__init__(**kwargs)
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
 

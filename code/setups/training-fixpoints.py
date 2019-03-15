@@ -40,8 +40,8 @@ if __name__ == '__main__':
         for activation in ['linear']:  # , 'sigmoid', 'relu']:
             for use_bias in [False]:
                 net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                # net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                # net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
         all_counters = []
         all_notable_nets = []
         all_names = []
@@ -51,7 +51,7 @@ if __name__ == '__main__':
             for _ in tqdm(range(exp.trials)):
                 net = ParticleDecorator(net_generator())
                 net = TrainingNeuralNetworkDecorator(net).with_params(epsilon=exp.epsilon)
-                name = str(net.net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
+                name = str(net.net.net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
                 for run_id in range(exp.run_count):
                     loss = net.compiled().train(epoch=run_id+1)
                 count(counters, net, notable_nets)

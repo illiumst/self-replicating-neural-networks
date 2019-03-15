@@ -154,6 +154,7 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
         data.extend([line_trace, line_start, line_end])
 
     axis_layout = dict(gridcolor='rgb(255, 255, 255)',
+                       gridwidth=3,
                        zerolinecolor='rgb(255, 255, 255)',
                        showbackground=True,
                        backgroundcolor='rgb(230, 230,230)',

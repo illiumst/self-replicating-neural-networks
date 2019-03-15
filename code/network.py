@@ -172,7 +172,7 @@ class ParticleDecorator:
         self.net = net
         self.states = []
         self.save_state(time=0,
-                        action= 'train_self',
+                        action='init',
                         counterpart=None
         )
 
