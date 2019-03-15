@@ -109,10 +109,11 @@ class Soup(object):
 
 
 if __name__ == '__main__':
-    if True:
+    if False:
         with SoupExperiment() as exp:
             for run_id in range(1):
                 net_generator = lambda: WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+                # net_generator = lambda: FFTNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
                 # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid')\
                 # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
                 # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
@@ -121,21 +122,26 @@ if __name__ == '__main__':
                 for _ in tqdm(range(1000)):
                     soup.evolve()
                 exp.log(soup.count())
+                exp.save(soup=soup.without_particles())
 
-    if False:
+    if True:
         with SoupExperiment("soup") as exp:
             for run_id in range(1):
-                net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2)).with_keras_params(
-                    activation='sigmoid').with_params(epsilon=0.0001)
-
-                # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid')\
+                net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2))\
+                    .with_keras_params(activation='linear').with_params(epsilon=0.0001)
+                # net_generator = lambda: TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, 2, 2))
+                # .with_keras_params(activation='linear')\
+                # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
+                # net_generator = lambda: TrainingNeuralNetworkDecorator(FFTNeuralNetwork(4, 2, 2))\
+                #     .with_keras_params(activation='linear')\
                 # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
                 # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
-                soup = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=10)
+                soup = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
                 soup.seed()
                 for _ in tqdm(range(100)):
                     soup.evolve()
-                    soup.print_all()
                 exp.log(soup.count())
-                exp.save(soup=soup.without_particles())  # you can access soup.historical_particles[particle_uid].states[time_step]['loss']
-                                     #             or soup.historical_particles[particle_uid].states[time_step]['weights'] from soup.dill
+                # you can access soup.historical_particles[particle_uid].states[time_step]['loss']
+                #             or soup.historical_particles[particle_uid].states[time_step]['weights']
+                # from soup.dill
+                exp.save(soup=soup.without_particles())

@@ -1,0 +1,4 @@
+ParticleDecorator activiation='linear' use_bias=False
+{'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 20}
+
+

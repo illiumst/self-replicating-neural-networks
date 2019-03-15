@@ -75,7 +75,7 @@ with Experiment('mixed-self-fixpoints') as exp:
         for trains_per_selfattack in exp.trains_per_selfattack_values:
             counters = generate_counters()
             notable_nets = []
-            for _ in tqdm(range(exp.trials)):
+            for soup_idx in tqdm(range(exp.trials)):
                 soup = Soup(exp.soup_size, lambda net_generator=net_generator,exp=exp: TrainingNeuralNetworkDecorator(net_generator()).with_params(epsilon=exp.epsilon))
                 soup.with_params(attacking_rate=0.1, learn_from_rate=-1, train=trains_per_selfattack, learn_from_severity=-1)
                 soup.seed()
@@ -84,6 +84,7 @@ with Experiment('mixed-self-fixpoints') as exp:
                     soup.evolve()
                 count(counters, soup, notable_nets)
                 keras.backend.clear_session()
+
             xs += [trains_per_selfattack]
             ys += [float(counters['fix_zero']) / float(exp.trials)]
             zs += [float(counters['fix_other']) / float(exp.trials)]

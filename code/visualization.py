@@ -98,6 +98,8 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
         return (val - a) / (b - a)
 
     data_list = build_from_soup_or_exp(soup_or_experiment)
+    if not data_list:
+        return
 
     bupu = cl.scales['11']['div']['RdYlGn']
     scale = cl.interp(bupu, len(data_list)+1)  # Map color scale to N bins
@@ -260,4 +262,4 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_latent_trajectories_3D, ["experiment.dill"])
+    search_and_apply(in_file, plot_latent_trajectories_3D, ["experiment.dill", "soup.dill"])

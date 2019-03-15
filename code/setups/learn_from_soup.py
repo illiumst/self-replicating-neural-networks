@@ -1,6 +1,7 @@
 import sys
 import os
 
+# Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
 from typing import Tuple
@@ -15,9 +16,6 @@ import keras.backend
 
 from statistics import mean
 avg = mean
-
-# Concat top Level dir to system environmental variables
-sys.path += os.path.join('..', '.')
 
 
 def generate_counters():
@@ -91,6 +89,7 @@ with SoupExperiment('learn-from-soup') as exp:
                     soup.evolve()
                 count(counters, soup, notable_nets)
                 keras.backend.clear_session()
+
             xs += [learn_from_severity]
             ys += [float(counters['fix_zero']) / float(exp.trials)]
             zs += [float(counters['fix_other']) / float(exp.trials)]        
@@ -102,6 +101,7 @@ with SoupExperiment('learn-from-soup') as exp:
 
     exp.save(all_names=all_names)
     exp.save(all_data=all_data)
+    exp.save(soup=soup.without_particles())
     for exp_id, name in enumerate(all_names):
         exp.log(all_names[exp_id])
         exp.log(all_data[exp_id])
