@@ -29,18 +29,20 @@ def plot_bars(names_bars_tuple, filename='histogram_plot'):
     # catagorical
     ryb = cl.scales['10']['div']['RdYlBu']
     names, bars = names_bars_tuple
-    names = ['Recurrent', 'Aggregating', 'Weightwise']# [name.split(' ')[0] for name in names]
+    situations = list(bars[0].keys())
+    names = ['Weightwise', 'Aggregating', 'Recurrent']  # [name.split(' ')[0] for name in names]
     data_dict = {}
     for idx, name in enumerate(names):
         data_dict[name] = bars[idx]
 
     data = []
 
-    for idx, name in enumerate(data_dict.keys()):
+    for idx, situation in enumerate(situations):
         bar = go.Bar(
-            y=[val for val in data_dict[name].values()],
-            x=[key for key in data_dict[name].keys()],
-            name=name,
+            y=[data_dict[name][situation] for name in names],
+            # x=[key for key in data_dict[name].keys()],
+            x=names,
+            name=situation,
             showlegend=True,
         )
         data.append(bar)
@@ -49,7 +51,7 @@ def plot_bars(names_bars_tuple, filename='histogram_plot'):
                   barmode='stack',
                   # height=400, width=400,
                   # margin=dict(l=20, r=20, t=20, b=20)
-                  legend=dict(orientation="h", x=0.2)
+                  legend=dict(orientation="h", x=0.05)
                   )
 
     fig = go.Figure(data=data, layout=layout)
@@ -90,5 +92,5 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_bars, files_to_look_for=['all_counters.dill'])
+    search_and_apply(in_file, plot_bars, files_to_look_for=['all_data.dill'])
     # , 'all_names.dill', 'all_notable_nets.dill'])
