@@ -8,7 +8,6 @@ from soup import *
 from experiment import *
 
 
-
 if __name__ == '__main__':
     def run_exp(net, prints=False):
         # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
