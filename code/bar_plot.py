@@ -29,6 +29,7 @@ def plot_bars(names_bars_tuple, filename='histogram_plot'):
     # catagorical
     ryb = cl.scales['10']['div']['RdYlBu']
     names, bars = names_bars_tuple
+    names = ['Recurrent', 'Aggregating', 'Weightwise']# [name.split(' ')[0] for name in names]
     data_dict = {}
     for idx, name in enumerate(names):
         data_dict[name] = bars[idx]
@@ -44,11 +45,11 @@ def plot_bars(names_bars_tuple, filename='histogram_plot'):
         )
         data.append(bar)
 
-    layout = dict(title='{} Histogram Plot'.format('Learn Severity'),
-                  xaxis=dict(title="Learn Severity", tilefont=dict(size=25)),
-                  # barmode='stack'
+    layout = dict(xaxis=dict(title="Fixpoints", titlefont=dict(size=20)),
+                  barmode='stack',
                   # height=400, width=400,
                   # margin=dict(l=20, r=20, t=20, b=20)
+                  legend=dict(orientation="h", x=0.2)
                   )
 
     fig = go.Figure(data=data, layout=layout)
@@ -89,5 +90,5 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_bars, files_to_look_for=['all_data.dill'])
+    search_and_apply(in_file, plot_bars, files_to_look_for=['all_counters.dill'])
     # , 'all_names.dill', 'all_notable_nets.dill'])

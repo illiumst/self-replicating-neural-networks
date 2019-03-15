@@ -28,7 +28,7 @@ def line_plot(names_exp_tuple, filename='lineplot'):
 
     names, line_dict_list = names_exp_tuple
 
-    names = "Weightwise Neural Network"
+    names = ['Weightwise', 'Aggregating', 'Recurrent']
 
     data = []
     base_scale = cl.scales['10']['div']['RdYlGn']
@@ -37,14 +37,16 @@ def line_plot(names_exp_tuple, filename='lineplot'):
         trace = go.Scatter(
             x=line_dict['xs'],
             y=line_dict['ys'],
-            # mode='lines',
-            name=names,
-            line=dict(color=scale[ld_id]),
+            name=names[ld_id],
+            line=dict(color=scale[ld_id],
+                      width=5),
         )
 
         data.append(trace)
 
-    layout = dict(title='{} Weight Wise Mixed '.format(''),
+    layout = dict(xaxis=dict(title='Trains per self-attack', titlefont=dict(size=20)),
+                  yaxis=dict(title='Average amount of fixpoints found', titlefont=dict(size=20)),
+                  legend=dict(orientation='h', x=0.2)
                   # height=800, width=800, margin=dict(l=0, r=0, t=0, b=0)
                   )
 

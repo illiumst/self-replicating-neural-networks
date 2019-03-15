@@ -54,7 +54,7 @@ def count(counters, soup, notable_nets=[]):
 
 if __name__ == '__main__':
 
-    with Experiment('mixed-self-fixpoints') as exp:
+    with Experiment('mixed-soup') as exp:
         exp.trials = 10
         exp.soup_size = 10
         exp.soup_life = 5
