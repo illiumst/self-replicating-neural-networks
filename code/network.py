@@ -167,8 +167,8 @@ class ParticleDecorator:
     next_uid = 0
 
     def __init__(self, net):
-        self.uid = self.next_uid
-        self.next_uid += 1
+        self.uid = self.__class__.next_uid
+        self.__class__.next_uid += 1
         self.net = net
         self.states = []
 

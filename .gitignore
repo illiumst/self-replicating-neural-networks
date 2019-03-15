@@ -3,7 +3,8 @@
 
 
 ### Local Datasets ###
-
+/experiments
+/setups/experiments
 
 ### Data ###
 *.csv

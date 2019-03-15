@@ -13,7 +13,7 @@ class Experiment:
             return dill.load(dill_file)
     
     def __init__(self, name=None, ident=None):
-        self.experiment_id = '{}_{}'.format(ident or '', time.time().as_integer_ratio()[0])
+        self.experiment_id = '{}_{}'.format(ident or '', time.time())
         self.experiment_name = name or 'unnamed_experiment'
         self.next_iteration = 0
         self.log_messages = []

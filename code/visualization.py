@@ -101,8 +101,9 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
     if not data_list:
         return
 
-    bupu = cl.scales['11']['div']['RdYlGn']
-    scale = cl.interp(bupu, len(data_list)+1)  # Map color scale to N bins
+    base_scale = cl.scales['9']['div']['RdYlGn']
+    # base_scale = cl.scales['9']['qual']['Set1']
+    scale = cl.interp(base_scale, len(data_list)+1)  # Map color scale to N bins
 
     # Fit the embedding space
     transformer = PCA(n_components=2)
@@ -122,10 +123,13 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
             y=transformed[:, 1],
             z=np.asarray(particle_dict['time']),
             text='Particle: {}<br> It had {} lifes.'.format(p_id, len(particle_dict['trajectory'])),
-            line=dict(color=scale[p_id]),
+            line=dict(
+                color=scale[p_id],
+                width=4
+            ),
             # legendgroup='Particle - {}'.format(p_id),
             name='Particle -{}'.format(p_id),
-            # showlegend=True,
+            showlegend=False,
             hoverinfo='text',
             mode='lines')
 
@@ -144,18 +148,27 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
                                   color='rgb(0, 0, 0)',
                                   size=4
                               ),
-                              showlegend=False
-                              )
+                                showlegend=False
+                                )
 
         data.extend([line_trace, line_start, line_end])
 
-    layout = go.Layout(scene=dict(aspectratio=dict(x=2, y=2, z=2),
-                                  xaxis=dict(tickwidth=1, title='Transformed X'),
-                                  yaxis=dict(tickwidth=1, title='transformed Y'),
-                                  zaxis=dict(tickwidth=1, title='Epoch')),
-                       title='{} - Latent Trajectory Movement'.format('Penis'),
-                       # width=0, height=0,
-                       margin=dict(l=0, r=0, b=0, t=0))
+    axis_layout = dict(gridcolor='rgb(255, 255, 255)',
+                       zerolinecolor='rgb(255, 255, 255)',
+                       showbackground=True,
+                       backgroundcolor='rgb(230, 230,230)'
+                       )
+
+    layout = go.Layout(scene=dict(
+        # aspectratio=dict(x=2, y=2, z=2),
+        xaxis=dict(tickwidth=1, title='Transformed X', **axis_layout),
+        yaxis=dict(tickwidth=1, title='Transformed Y', **axis_layout),
+        zaxis=dict(tickwidth=1, title='Epoch', **axis_layout)),
+        # title='{} - Latent Trajectory Movement'.format('Soup'),
+
+        width=1024, height=1024,
+        margin=dict(l=0, r=0, b=0, t=0)
+    )
 
     fig = go.Figure(data=data, layout=layout)
     pl.offline.plot(fig, auto_open=True, filename=filename)
@@ -240,7 +253,7 @@ def search_and_apply(absolut_file_or_folder, plotting_function, files_to_look_fo
             search_and_apply(sub_file_or_folder.path, plotting_function, files_to_look_for=files_to_look_for)
     elif absolut_file_or_folder.endswith('.dill'):
         file_or_folder = os.path.split(absolut_file_or_folder)[-1]
-        if file_or_folder in files_to_look_for and not os.path.exists('{}.html'.format(file_or_folder[:-5])):
+        if file_or_folder in files_to_look_for and not os.path.exists('{}.html'.format(absolut_file_or_folder[:-5])):
             print('Apply Plotting function "{func}" on file "{file}"'.format(func=plotting_function.__name__,
                                                                              file=absolut_file_or_folder)
                   )
@@ -262,4 +275,4 @@ if __name__ == '__main__':
     in_file = args.in_file[0]
     out_file = args.out_file
 
-    search_and_apply(in_file, plot_latent_trajectories_3D, ["experiment.dill", "soup.dill"])
+    search_and_apply(in_file, plot_latent_trajectories_3D, ["trajectorys.dill", "soup.dill"])

@@ -26,8 +26,9 @@ if __name__ == '__main__':
                 run_exp(net)
                 K.clear_session()
             exp.log(exp.counters)
+            exp.save(trajectorys=exp.without_particles())
 
-    if True:
+    if False:
         # Aggregating Neural Network
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(10)):
@@ -36,8 +37,9 @@ if __name__ == '__main__':
                 run_exp(net)
                 K.clear_session()
             exp.log(exp.counters)
+            exp.save(trajectorys=exp.without_particles())
 
-    if True:
+    if False:
         #FFT Neural Network
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(10)):
@@ -46,8 +48,9 @@ if __name__ == '__main__':
                 run_exp(net)
                 K.clear_session()
             exp.log(exp.counters)
+            exp.save(trajectorys=exp.without_particles())
 
-    if True:
+    if False:
         # ok so this works quite realiably
         with FixpointExperiment() as exp:
             for i in range(10):
@@ -60,8 +63,9 @@ if __name__ == '__main__':
                     if run_id % 10 == 0:
                         run_exp(net)
                 K.clear_session()
+            exp.save(trajectorys=exp.without_particles())
 
-    if True:
+    if False:
         # ok so this works quite realiably
         with FixpointExperiment() as exp:
             for i in range(10):
@@ -74,6 +78,7 @@ if __name__ == '__main__':
                     if run_id % 10 == 0:
                         run_exp(net)
                 K.clear_session()
+            exp.save(trajectorys=exp.without_particles())
 
     if False:
         # this explodes in our faces completely... NAN everywhere

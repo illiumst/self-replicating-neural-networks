@@ -136,7 +136,7 @@ if __name__ == '__main__':
                 #     .with_keras_params(activation='linear')\
                 # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
                 # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
-                soup = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
+                soup = Soup(100, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
                 soup.seed()
                 for _ in tqdm(range(100)):
                     soup.evolve()
