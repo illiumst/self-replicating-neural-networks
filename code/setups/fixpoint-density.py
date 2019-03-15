@@ -36,11 +36,11 @@ if __name__ == '__main__':
         exp.trials = 100000
         exp.epsilon = 1e-4
         net_generators = []
-        for activation in ['linear', 'sigmoid', 'relu']:
+        for activation in ['linear']:
             net_generators += [lambda activation=activation: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
             net_generators += [lambda activation=activation: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-            #net_generators += [lambda activation=activation: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
-            net_generators += [lambda activation=activation: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+            # net_generators += [lambda activation=activation: FFTNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
+            # net_generators += [lambda activation=activation: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=False)]
         all_counters = []
         all_notable_nets = []
         all_names = []

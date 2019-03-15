@@ -40,8 +40,8 @@ if __name__ == '__main__':
         for activation in ['linear']:  # , 'sigmoid', 'relu']:
             for use_bias in [False]:
                 net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                # net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+                # net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
         all_counters = []
         all_notable_nets = []
         all_names = []
@@ -59,7 +59,9 @@ if __name__ == '__main__':
             all_notable_nets += [notable_nets]
             all_names += [name]
             K.clear_session()
-        exp.save(all_counters=all_counters) #net types reached in the end
+        exp.save(all_counters=all_counters)
+        exp.save(trajectorys=exp.without_particles())
+        # net types reached in the end
         # exp.save(all_notable_nets=all_notable_nets)
         exp.save(all_names=all_names) #experiment setups
         for exp_id, counter in enumerate(all_counters):

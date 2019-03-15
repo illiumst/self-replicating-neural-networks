@@ -50,7 +50,7 @@ def plot_latent_trajectories(soup_or_experiment, filename='latent_trajectory_plo
     transformer = TSNE()
     for particle_dict in data_dict:
         array = np.asarray([np.hstack([x.flatten() for x in timestamp]).flatten()
-                             for timestamp in particle_dict['trajectory']])
+                            for timestamp in particle_dict['trajectory']])
         particle_dict['trajectory'] = array
         transformer.fit(array)
 
@@ -134,20 +134,20 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
             mode='lines')
 
         line_start = go.Scatter3d(mode='markers', x=[transformed[0, 0]], y=[transformed[0, 1]],
-                                z=np.asarray(particle_dict['time'][0]),
-                                marker=dict(
-                                    color='rgb(255, 0, 0)',
-                                    size=4
-                                ),
-                                showlegend=False
-                                )
+                                  z=np.asarray(particle_dict['time'][0]),
+                                  marker=dict(
+                                      color='rgb(255, 0, 0)',
+                                      size=4
+                                  ),
+                                  showlegend=False
+                                  )
 
         line_end = go.Scatter3d(mode='markers', x=[transformed[-1, 0]], y=[transformed[-1, 1]],
-                              z=np.asarray(particle_dict['time'][-1]),
-                              marker=dict(
-                                  color='rgb(0, 0, 0)',
-                                  size=4
-                              ),
+                                z=np.asarray(particle_dict['time'][-1]),
+                                marker=dict(
+                                    color='rgb(0, 0, 0)',
+                                    size=4
+                                ),
                                 showlegend=False
                                 )
 
@@ -156,14 +156,18 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
     axis_layout = dict(gridcolor='rgb(255, 255, 255)',
                        zerolinecolor='rgb(255, 255, 255)',
                        showbackground=True,
-                       backgroundcolor='rgb(230, 230,230)'
+                       backgroundcolor='rgb(230, 230,230)',
+                       titlefont=dict(
+                           color='black',
+                           size=30
+                           )
                        )
 
     layout = go.Layout(scene=dict(
         # aspectratio=dict(x=2, y=2, z=2),
-        xaxis=dict(tickwidth=1, title='Transformed X', **axis_layout),
-        yaxis=dict(tickwidth=1, title='Transformed Y', **axis_layout),
-        zaxis=dict(tickwidth=1, title='Epoch', **axis_layout)),
+        xaxis=dict(title='Transformed X', **axis_layout),
+        yaxis=dict(title='Transformed Y', **axis_layout),
+        zaxis=dict(title='Epoch', **axis_layout)),
         # title='{} - Latent Trajectory Movement'.format('Soup'),
 
         width=1024, height=1024,
@@ -171,7 +175,7 @@ def plot_latent_trajectories_3D(soup_or_experiment, filename='plot'):
     )
 
     fig = go.Figure(data=data, layout=layout)
-    pl.offline.plot(fig, auto_open=True, filename=filename)
+    pl.offline.plot(fig, auto_open=True, filename=filename, validate=True)
     pass
 
 

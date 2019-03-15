@@ -171,6 +171,10 @@ class ParticleDecorator:
         self.__class__.next_uid += 1
         self.net = net
         self.states = []
+        self.save_state(time=0,
+                        action= 'train_self',
+                        counterpart=None
+        )
 
     def __getattr__(self, name):
         return getattr(self.net, name)

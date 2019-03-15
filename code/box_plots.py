@@ -60,7 +60,16 @@ def plot_box(exp: Experiment, filename='histogram_plot'):
 
     trace_list.extend([vergence_box, fixpoint_box])
 
-    layout = dict(title='{} Histogram Plot'.format('Experiment Name Penis'),
+    layout = dict(title='{}'.format('Known Fixpoint Variation'),
+                  titlefont=dict(size=30),
+                  legend=dict(
+                      orientation="h",
+                      x=.1, y=-0.1,
+                      font=dict(
+                          size=20,
+                          color='black'
+                      ),
+                  ),
                   boxmode='group',
                   boxgap=0,
                   # barmode='group',
@@ -71,9 +80,13 @@ def plot_box(exp: Experiment, filename='histogram_plot'):
                              showticklabels=True),
                   yaxis=dict(
                       title='Occurences',
-                      zeroline=False)
+                      zeroline=False,
+                      titlefont=dict(
+                          size=30
+                      )
+                  ),
                   # height=400, width=400,
-                  # margin=dict(l=20, r=20, t=20, b=20)
+                  margin=dict(t=50)
                   )
 
     fig = go.Figure(data=trace_list, layout=layout)
@@ -94,8 +107,10 @@ def search_and_apply(absolut_file_or_folder, plotting_function, files_to_look_fo
 
             with open(absolut_file_or_folder, 'rb') as in_f:
                 exp = dill.load(in_f)
-
-            plotting_function(exp, filename='{}.html'.format(absolut_file_or_folder[:-5]))
+            try:
+                plotting_function(exp, filename='{}.html'.format(absolut_file_or_folder[:-5]))
+            except AttributeError:
+                pass
 
         else:
             pass

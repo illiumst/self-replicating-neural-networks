@@ -19,14 +19,15 @@ if __name__ == '__main__':
 
     if True:
         # WeightWise Neural Network
-        with FixpointExperiment() as exp:
-            for run_id in tqdm(range(10)):
-                net = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)
-                                        .with_keras_params(activation='linear'))
-                run_exp(net)
-                K.clear_session()
-            exp.log(exp.counters)
-            exp.save(trajectorys=exp.without_particles())
+        for _ in range(10):
+            with FixpointExperiment() as exp:
+                for run_id in tqdm(range(20)):
+                    net = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)
+                                            .with_keras_params(activation='linear'))
+                    run_exp(net)
+                    K.clear_session()
+                exp.log(exp.counters)
+                exp.save(trajectorys=exp.without_particles())
 
     if False:
         # Aggregating Neural Network
