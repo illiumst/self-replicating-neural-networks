@@ -47,7 +47,7 @@ def plot_bars(names_bars_tuple, filename='histogram_plot'):
         )
         data.append(bar)
 
-    layout = dict(xaxis=dict(title="Fixpoints", titlefont=dict(size=20)),
+    layout = dict(xaxis=dict(title="Networks", titlefont=dict(size=20)),
                   barmode='stack',
                   # height=400, width=400,
                   # margin=dict(l=20, r=20, t=20, b=20)

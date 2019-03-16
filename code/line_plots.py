@@ -28,21 +28,38 @@ def line_plot(names_exp_tuple, filename='lineplot'):
 
     names, line_dict_list = names_exp_tuple
 
-    names = ['Weightwise', 'Aggregating']
+    names = ['Weightwise', 'Aggregating', 'Recurrent']
 
-    data = []
-    base_scale = cl.scales['10']['div']['RdYlGn']
-    scale = cl.interp(base_scale, len(line_dict_list) + 1)  # Map color scale to N bins
-    for ld_id, line_dict in enumerate(line_dict_list):
-        for data_point in ['ys', 'zs']:
+    if False:
+        data = []
+        base_scale = cl.scales['10']['div']['RdYlGn']
+        scale = cl.interp(base_scale, len(line_dict_list) + 1)  # Map color scale to N bins
+        for ld_id, line_dict in enumerate(line_dict_list):
+            for data_point in ['ys', 'zs']:
+                trace = go.Scatter(
+                    x=line_dict['xs'],
+                    y=line_dict[data_point],
+                    name='{} {}zero-fixpoints'.format(names[ld_id], 'non-' if data_point == 'zs' else ''),
+                    line=dict(
+                        # color=scale[ld_id],
+                        width=5,
+                        # dash='dash' if data_point == 'ys' else ''
+                    ),
+                )
+
+                data.append(trace)
+    if True:
+
+        data = []
+        base_scale = cl.scales['10']['div']['RdYlGn']
+        scale = cl.interp(base_scale, len(line_dict_list) + 1)  # Map color scale to N bins
+        for ld_id, line_dict in enumerate(line_dict_list):
             trace = go.Scatter(
                 x=line_dict['xs'],
-                y=line_dict[data_point],
-                name='{} {}zero-fixpoints'.format(names[ld_id], 'non-' if data_point == 'zs' else ''),
-                line=dict(
-                    # color=scale[ld_id],
-                    width=5,
-                    # dash='dash' if data_point == 'ys' else ''
+                y=line_dict['ys'],
+                name=names[ld_id],
+                line=dict(  # color=scale[ld_id],
+                          width=5
                 ),
             )
 
