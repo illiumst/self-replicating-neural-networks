@@ -4,7 +4,6 @@ import os
 # Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
-from util import *
 from experiment import *
 from network import *
 

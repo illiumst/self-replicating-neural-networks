@@ -6,13 +6,12 @@ sys.path += os.path.join('..', '.')
 
 from typing import Tuple
 
-from util import *
 from experiment import *
 from network import *
 from soup import *
 
 
-import keras.backend
+import tensorflow.python.keras.backend as K
 
 from statistics import mean
 avg = mean
@@ -28,7 +27,7 @@ def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
 
-def count(counters, soup, notable_nets=[]):
+def count(counters, soup, notable_nets=None):
     """
     Count the occurences ot the types of weight trajectories.
 
@@ -40,6 +39,7 @@ def count(counters, soup, notable_nets=[]):
     :return:    Both the counter dictionary and the list of interessting nets.
     """
 
+    notable_nets = notable_nets or list()
     for net in soup.particles:
         if net.is_diverged():
             counters['divergent'] += 1

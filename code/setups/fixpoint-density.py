@@ -3,16 +3,18 @@ import os
 # Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
-from util import *
 from experiment import *
 from network import *
 
-import keras.backend
+import tensorflow.python.keras.backend as K
+
 
 def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
-def count(counters, net, notable_nets=[]):
+
+def count(counters, net, notable_nets=None):
+    notable_nets = notable_nets or []
     if net.is_diverged():
         counters['divergent'] += 1
     elif net.is_fixpoint():
@@ -52,7 +54,7 @@ if __name__ == '__main__':
                 net = ParticleDecorator(net)
                 name = str(net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias='" + str(net.get_keras_params().get('use_bias')) + "'"
                 count(counters, net, notable_nets)
-                keras.backend.clear_session()
+                K.clear_session()
             all_counters += [counters]
             # all_notable_nets += [notable_nets]
             all_names += [name]

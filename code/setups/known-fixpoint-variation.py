@@ -5,12 +5,11 @@ import os
 # Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
-from util import *
 from experiment import *
 from network import *
 from soup import prng
 
-import keras.backend
+import tensorflow.python.keras.backend as K
 
 
 from statistics import mean
@@ -85,7 +84,7 @@ if __name__ == '__main__':
                 exp.ys += [time_to_something]
                 # time steps still regarded as sthe initial fix-point
                 exp.zs += [time_as_fixpoint]
-                keras.backend.clear_session()
+                K.backend.clear_session()
             current_scale /= 10.0
         for d in range(exp.depth):
             exp.log('variation 10e-' + str(d))

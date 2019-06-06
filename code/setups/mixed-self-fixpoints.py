@@ -6,11 +6,10 @@ from typing import Tuple
 # Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
-from util import *
 from experiment import *
 from network import *
 
-import keras.backend
+import tensorflow.python.keras.backend as K
 
 
 def generate_counters():
@@ -23,7 +22,7 @@ def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
 
-def count(counters, net, notable_nets=[]):
+def count(counters, net, notable_nets=None):
     """
     Count the occurences ot the types of weight trajectories.
 
@@ -34,7 +33,7 @@ def count(counters, net, notable_nets=[]):
     :rtype      Tuple[dict, list]
     :return:    Both the counter dictionary and the list of interessting nets.
     """
-
+    notable_nets = notable_nets or list()
     if net.is_diverged():
         counters['divergent'] += 1
     elif net.is_fixpoint():

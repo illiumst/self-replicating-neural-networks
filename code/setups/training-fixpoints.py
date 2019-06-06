@@ -4,16 +4,16 @@ import os
 # Concat top Level dir to system environmental variables
 sys.path += os.path.join('..', '.')
 
-from util import *
 from experiment import *
 from network import *
 
-import keras.backend as K
+import tensorflow.python.keras.backend as K
 
 def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
-def count(counters, net, notable_nets=[]):
+def count(counters, net, notable_nets=None):
+    notable_nets = notable_nets or list()
     if net.is_diverged():
         counters['divergent'] += 1
     elif net.is_fixpoint():

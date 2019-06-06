@@ -61,7 +61,7 @@ class LearningNeuralNetwork(NeuralNetwork):
             print("updated old weight aggregations " + str(old_aggregation))
             print("to new weight aggregations      " + str(new_aggregation))
             print("resulting in network weights ...")
-            print(self.__class__.weights_to_string(new_weights))
+            print(self.weights_to_string(new_weights))
         return new_weights
 
     def with_compile_params(self, **kwargs):
