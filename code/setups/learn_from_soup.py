@@ -90,7 +90,7 @@ if __name__ == '__main__':
                     for time in range(exp.soup_life):
                         soup.evolve()
                     count(counters, soup, notable_nets)
-                    keras.backend.clear_session()
+                    K.clear_session()
 
                 xs += [learn_from_severity]
                 ys += [float(counters['fix_zero']) / float(exp.trials)]

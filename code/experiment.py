@@ -4,48 +4,48 @@ import dill
 from tqdm import tqdm
 import copy
 
+from abc import ABC, abstractmethod
 
-class Experiment:
-    
+
+class _BaseExperiment(ABC):
+
     @staticmethod
     def from_dill(path):
         with open(path, "rb") as dill_file:
             return dill.load(dill_file)
-    
+
     def __init__(self, name=None, ident=None):
-        self.experiment_id = '{}_{}'.format(ident or '', time.time())
+        self.experiment_id = f'{ident or ""}_{time.time()}'
         self.experiment_name = name or 'unnamed_experiment'
         self.next_iteration = 0
-        self.log_messages = []
-        self.historical_particles = {}
-    
+        self.log_messages = list()
+        self.historical_particles = dict()
+
     def __enter__(self):
-        self.dir = os.path.join('experiments', 'exp-{name}-{id}-{it}'.format(
-            name=self.experiment_name, id=self.experiment_id, it=self.next_iteration)
-                                )
+        self.dir = os.path.join('experiments', f'exp-{self.experiment_name}-{self.experiment_id}-{self.next_iteration}')
         os.makedirs(self.dir)
-        print("** created {dir} **".format(dir=self.dir))
+        print(f'** created {self.dir} **')
         return self
-    
+
     def __exit__(self, exc_type, exc_value, traceback):
         self.save(experiment=self.without_particles())
         self.save_log()
         self.next_iteration += 1
-    
+
     def log(self, message, **kwargs):
         self.log_messages.append(message)
         print(message, **kwargs)
-    
+
     def save_log(self, log_name="log"):
-        with open(os.path.join(self.dir, "{name}.txt".format(name=log_name)), "w") as log_file:
+        with open(os.path.join(self.dir, f"{log_name}.txt"), "w") as log_file:
             for log_message in self.log_messages:
                 print(str(log_message), file=log_file)
 
     def __copy__(self):
-        copy_ = Experiment(name=self.experiment_name,)
-        copy_.__dict__ = {attr: self.__dict__[attr] for attr in self.__dict__ if
-                          attr not in ['particles', 'historical_particles']}
-        return copy_
+        self_copy = self.__class__(name=self.experiment_name,)
+        self_copy.__dict__ = {attr: self.__dict__[attr] for attr in self.__dict__ if
+                              attr not in ['particles', 'historical_particles']}
+        return self_copy
 
     def without_particles(self):
         self_copy = copy.copy(self)
@@ -55,14 +55,29 @@ class Experiment:
 
     def save(self, **kwargs):
         for name, value in kwargs.items():
-            with open(os.path.join(self.dir, "{name}.dill".format(name=name)), "wb") as dill_file:
+            with open(os.path.join(self.dir, f"{name}.dill"), "wb") as dill_file:
                 dill.dump(value, dill_file)
+
+    @abstractmethod
+    def run_net(self, network, iterations, run_id=0):
+        raise NotImplementedError
+        pass
+
+
+class Experiment(_BaseExperiment):
+
+    def __init__(self, **kwargs):
+        super(Experiment, self).__init__(**kwargs)
+        pass
+
+    def run_net(self, network, iterations, run_id=0):
+        pass
 
 
 class FixpointExperiment(Experiment):
 
     def __init__(self, **kwargs):
-        kwargs['name'] =  self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
+        kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
         super().__init__(**kwargs)
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
@@ -107,14 +122,14 @@ class MixedFixpointExperiment(FixpointExperiment):
             if run_id:
                 net.save_state()
         self.count(net)
-    
-            
+
+
 class SoupExperiment(Experiment):
     pass
 
 
 class IdentLearningExperiment(Experiment):
-    
+
     def __init__(self):
         super(IdentLearningExperiment, self).__init__(name=self.__class__.__name__)
     pass

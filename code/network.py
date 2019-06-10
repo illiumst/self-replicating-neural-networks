@@ -315,6 +315,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
     @staticmethod
     def aggregate_fft(array: np.ndarray, aggregates: int):
         flat = array.flatten()
+        # noinspection PyTypeChecker
         fft_reduction = np.fft.fftn(flat, aggregates)
         return fft_reduction
 
@@ -542,7 +543,7 @@ if __name__ == '__main__':
             for run_id in tqdm(range(10)):
                 net = ParticleDecorator(
                     WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear'))
-                run_exp(net)
+                exp.run_exp(net)
                 K.clear_session()
             exp.log(exp.counters)
 
