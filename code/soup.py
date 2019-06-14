@@ -111,9 +111,9 @@ class Soup(object):
 if __name__ == '__main__':
     if True:
         net_generator = lambda: WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
-        soup_generator = Soup(100, net_generator).with_params(remove_divergent=True, remove_zero=True)
+        soup_generator = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True)
         exp = SoupExperiment()
-        exp.run_exp(net_generator, 1000, soup_generator, 1, False)
+        exp.run_exp(net_generator, 10, soup_generator, 1, False)
 
         # net_generator = lambda: FFTNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
         # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid')\
@@ -123,10 +123,10 @@ if __name__ == '__main__':
     if True:
         net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2)) \
             .with_keras_params(activation='linear').with_params(epsilon=0.0001)
-        soup_generator = lambda: Soup(100, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
+        soup_generator = lambda: Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
         exp = SoupExperiment(name="soup")
 
-        exp.run_exp(net_generator, 100, soup_generator, 1, False)
+        exp.run_exp(net_generator, 10, soup_generator, 1, False)
 
         # net_generator = lambda: TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, 2, 2))
         # .with_keras_params(activation='linear')\

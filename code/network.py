@@ -137,6 +137,7 @@ class NeuralNetwork(ABC):
         super().__init__()
         self.params = dict(epsilon=0.00000000000001)
         self.params.update(params)
+        self.name = params.get('name', self.__class__.__name__)
         self.keras_params = dict(activation='linear', use_bias=False)
         self.states = []
         self.model: Sequential
@@ -532,38 +533,40 @@ if __name__ == '__main__':
 
     if True:
         # WeightWise Neural Network
-        net_generator = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear'))
+        net_generator = lambda : ParticleDecorator(
+            WeightwiseNeuralNetwork(width=2, depth=2
+                                    ).with_keras_params(activation='linear'))
         with FixpointExperiment() as exp:
             exp.run_exp(net_generator, 10, logging=True)
             exp.reset_all()
 
-    if False:
+    if True:
         # Aggregating Neural Network
-        net_generator = ParticleDecorator(AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params())
+        net_generator = lambda :ParticleDecorator(
+            AggregatingNeuralNetwork(aggregates=4, width=2, depth=2
+                                     ).with_keras_params())
         with FixpointExperiment() as exp:
             exp.run_exp(net_generator, 10, logging=True)
-
             exp.reset_all()
 
-    if False:
+    if True:
         # FFT Aggregation
         net_generator = lambda: ParticleDecorator(
             AggregatingNeuralNetwork(
                 aggregates=4, width=2, depth=2, aggregator=AggregatingNeuralNetwork.aggregate_fft
             ).with_keras_params(activation='linear'))
         with FixpointExperiment() as exp:
-            for run_id in tqdm(range(10)):
-                exp.run_exp(net_generator, 1)
-                exp.log(exp.counters)
-                exp.reset_model()
+            exp.run_exp(net_generator, 10)
+            exp.log(exp.counters)
+            exp.reset_model()
             exp.reset_all()
 
     if True:
         # ok so this works quite realiably
         run_count = 10000
-        net_generator = TrainingNeuralNetworkDecorator(
-            ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2))
-        ).with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
+        net_generator = lambda : TrainingNeuralNetworkDecorator(
+            ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)
+                              )).with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
         with MixedFixpointExperiment() as exp:
             for run_id in tqdm(range(run_count+1)):
                 exp.run_exp(net_generator, 1)

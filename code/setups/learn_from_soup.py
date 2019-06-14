@@ -11,7 +11,7 @@ from network import *
 from soup import *
 
 
-import tensorflow.python.keras.backend as K
+from tensorflow.python.keras import backend as K
 
 from statistics import mean
 avg = mean
@@ -59,7 +59,7 @@ def count(counters, soup, notable_nets=None):
 
 if __name__ == '__main__':
 
-    with SoupExperiment('learn-from-soup') as exp:
+    with SoupExperiment(name='learn-from-soup') as exp:
         exp.soup_size = 10
         exp.soup_life = 100
         exp.trials = 10
@@ -83,10 +83,10 @@ if __name__ == '__main__':
                 counters = generate_counters()
                 results = []
                 for _ in tqdm(range(exp.trials)):
-                    soup = Soup(exp.soup_size, lambda net_generator=net_generator,exp=exp: TrainingNeuralNetworkDecorator(net_generator()).with_params(epsilon=exp.epsilon))
+                    soup = Soup(exp.soup_size, lambda net_generator=net_generator, exp=exp: TrainingNeuralNetworkDecorator(net_generator()).with_params(epsilon=exp.epsilon))
                     soup.with_params(attacking_rate=-1, learn_from_rate=0.1, train=0, learn_from_severity=learn_from_severity)
                     soup.seed()
-                    name = str(soup.particles[0].net.__class__.__name__) + " activiation='" + str(soup.particles[0].get_keras_params().get('activation')) + "' use_bias=" + str(soup.particles[0].get_keras_params().get('use_bias'))
+                    name = str(soup.particles[0].name) + " activiation='" + str(soup.particles[0].get_keras_params().get('activation')) + "' use_bias=" + str(soup.particles[0].get_keras_params().get('use_bias'))
                     for time in range(exp.soup_life):
                         soup.evolve()
                     count(counters, soup, notable_nets)

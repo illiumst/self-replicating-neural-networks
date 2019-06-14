@@ -9,6 +9,10 @@ from tensorflow.python.keras import backend as K
 from abc import ABC, abstractmethod
 
 
+class IllegalArgumentError(ValueError):
+    pass
+
+
 class Experiment(ABC):
 
     @staticmethod
@@ -69,23 +73,22 @@ class Experiment(ABC):
         raise NotImplementedError
         pass
 
-    def run_exp(self, network_generator, exp_iterations, prints=False, **kwargs):
+    def run_exp(self, network_generator, exp_iterations, step_limit=100, prints=False, reset_model=False):
         # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
         for run_id in range(exp_iterations):
             network = network_generator()
-            self.run_net(network, 100, run_id=run_id + 1, **kwargs)
+            self.run_net(network, step_limit, run_id=run_id + 1)
             self.historical_particles[run_id] = network
             if prints:
                 print("Fixpoint? " + str(network.is_fixpoint()))
-        self.reset_model()
+        if reset_model:
+            self.reset_model()
 
     def reset_all(self):
         self.reset_model()
 
 
 class FixpointExperiment(Experiment):
-    if kwargs.get('logging', False):
-        self.log(self.counters)
 
     def __init__(self, **kwargs):
         kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
@@ -93,11 +96,20 @@ class FixpointExperiment(Experiment):
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
 
+    def run_exp(self, network_generator, exp_iterations, logging=True, **kwargs):
+        kwargs.update(reset_model=False)
+        super(FixpointExperiment, self).run_exp(network_generator, exp_iterations, **kwargs)
+        if logging:
+            self.log(self.counters)
+        self.reset_model()
+
     def run_net(self, net, step_limit=100, run_id=0, **kwargs):
-        i = 0
-        while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
+        if len(kwargs):
+            raise IllegalArgumentError
+        for i in range(step_limit):
+            if net.is_diverged() or net.is_fixpoint():
+                break
             net.self_attack()
-            i += 1
             if run_id:
                 net.save_state(time=i)
         self.count(net)
@@ -128,14 +140,17 @@ class FixpointExperiment(Experiment):
 
 class MixedFixpointExperiment(FixpointExperiment):
 
-    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
+    def __init__(self, **kwargs):
+        super(MixedFixpointExperiment, self).__init__(name=kwargs.get('name', self.__class__.__name__))
+
+    def run_net(self, net, step_limit=100, run_id=0, **kwargs):
         for i in range(step_limit):
             if net.is_diverged() or net.is_fixpoint():
                 break
             net.self_attack()
             with tqdm(postfix=["Loss", dict(value=0)]) as bar:
-                for _ in range(trains_per_application):
-                    loss = net.compiled().train()
+                for _ in range(kwargs.get('trains_per_application', 100)):
+                    loss = net.train()
                     bar.postfix[1]["value"] = loss
                     bar.update()
             if run_id:
@@ -164,8 +179,8 @@ class SoupExperiment(Experiment):
 
 class IdentLearningExperiment(Experiment):
 
-    def __init__(self):
-        super(IdentLearningExperiment, self).__init__(name=self.__class__.__name__)
+    def __init__(self, **kwargs):
+        super(IdentLearningExperiment, self).__init__(name=kwargs.get('name', self.__class__.__name__))
 
     def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
         pass

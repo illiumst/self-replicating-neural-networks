@@ -9,8 +9,6 @@ sys.path += os.path.join('..', '.')
 from experiment import *
 from network import *
 
-import tensorflow.python.keras.backend as K
-
 
 def generate_counters():
     """
@@ -84,7 +82,7 @@ if __name__ == '__main__':
                         if net.is_diverged() or net.is_fixpoint():
                             break
                     count(counters, net, notable_nets)
-                    keras.backend.clear_session()
+                    exp.reset_model()
                 xs += [trains_per_selfattack]
                 ys += [float(counters['fix_zero'] + counters['fix_other']) / float(exp.trials)]
             all_names += [name]

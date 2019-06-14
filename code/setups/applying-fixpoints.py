@@ -7,12 +7,13 @@ sys.path += os.path.join('..', '.')
 from experiment import *
 from network import *
 
-import keras.backend as K
 
 def generate_counters():
     return {'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
 
-def count(counters, net, notable_nets=[]):
+
+def count(counters, net, notable_nets: list=None):
+    notable_nets = notable_nets or list()
     if net.is_diverged():
         counters['divergent'] += 1
     elif net.is_fixpoint():
@@ -31,7 +32,7 @@ def count(counters, net, notable_nets=[]):
 
 if __name__ == '__main__':
 
-    with Experiment('applying_fixpoint') as exp:
+    with FixpointExperiment(name='applying_fixpoint') as exp:
         exp.trials = 50
         exp.run_count = 100
         exp.epsilon = 1e-4
@@ -40,7 +41,7 @@ if __name__ == '__main__':
             for use_bias in [False]:
                 net_generators += [lambda activation=activation, use_bias=use_bias: WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
                 net_generators += [lambda activation=activation, use_bias=use_bias: AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
-                net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
+        #       net_generators += [lambda activation=activation, use_bias=use_bias: RecurrentNeuralNetwork(width=2, depth=2).with_keras_params(activation=activation, use_bias=use_bias)]
         all_counters = []
         all_notable_nets = []
         all_names = []
@@ -50,14 +51,14 @@ if __name__ == '__main__':
             for _ in tqdm(range(exp.trials)):
                 net = ParticleDecorator(net_generator())
                 net.with_params(epsilon=exp.epsilon)
-                name = str(net.net.__class__.__name__) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
+                name = str(net.name) + " activiation='" + str(net.get_keras_params().get('activation')) + "' use_bias=" + str(net.get_keras_params().get('use_bias'))
                 for run_id in range(exp.run_count):
                     loss = net.self_attack()
                 count(counters, net, notable_nets)
             all_counters += [counters]
             all_notable_nets += [notable_nets]
             all_names += [name]
-            K.clear_session()
+            exp.reset_model()
         exp.save(all_counters=all_counters)
         exp.save(trajectorys=exp.without_particles())
         # net types reached in the end
