@@ -529,57 +529,46 @@ class TrainingNeuralNetworkDecorator:
 
 
 if __name__ == '__main__':
-    def run_exp(network, prints=False):
-        # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
-        exp.run_net(network, 100, run_id=run_id + 1)
-        exp.historical_particles[run_id] = network
-        if prints:
-            print("Fixpoint? " + str(network.is_fixpoint()))
-            print("Loss " + str(loss))
 
-    if False:
+    if True:
         # WeightWise Neural Network
+        net_generator = ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear'))
         with FixpointExperiment() as exp:
-            for run_id in tqdm(range(10)):
-                net = ParticleDecorator(
-                    WeightwiseNeuralNetwork(width=2, depth=2).with_keras_params(activation='linear'))
-                exp.run_exp(net)
-                K.clear_session()
-            exp.log(exp.counters)
+            exp.run_exp(net_generator, 10, logging=True)
+            exp.reset_all()
 
     if False:
         # Aggregating Neural Network
+        net_generator = ParticleDecorator(AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params())
         with FixpointExperiment() as exp:
-            for run_id in tqdm(range(10)):
-                net = ParticleDecorator(
-                    AggregatingNeuralNetwork(aggregates=4, width=2, depth=2).with_keras_params())
-                run_exp(net)
-                K.clear_session()
-            exp.log(exp.counters)
+            exp.run_exp(net_generator, 10, logging=True)
+
+            exp.reset_all()
 
     if False:
         # FFT Aggregation
+        net_generator = lambda: ParticleDecorator(
+            AggregatingNeuralNetwork(
+                aggregates=4, width=2, depth=2, aggregator=AggregatingNeuralNetwork.aggregate_fft
+            ).with_keras_params(activation='linear'))
         with FixpointExperiment() as exp:
             for run_id in tqdm(range(10)):
-                net = ParticleDecorator(
-                    AggregatingNeuralNetwork(
-                        aggregates=4, width=2, depth=2, aggregator=AggregatingNeuralNetwork.aggregate_fft
-                    ).with_keras_params(activation='linear'))
-                run_exp(net)
-                K.clear_session()
-            exp.log(exp.counters)
+                exp.run_exp(net_generator, 1)
+                exp.log(exp.counters)
+                exp.reset_model()
+            exp.reset_all()
 
     if True:
         # ok so this works quite realiably
-        with FixpointExperiment() as exp:
-            run_count = 1000
-            net = TrainingNeuralNetworkDecorator(ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)))
-            net.with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
+        run_count = 10000
+        net_generator = TrainingNeuralNetworkDecorator(
+            ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2))
+        ).with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
+        with MixedFixpointExperiment() as exp:
             for run_id in tqdm(range(run_count+1)):
-                net.compiled()
-                loss = net.train(epoch=run_id)
+                exp.run_exp(net_generator, 1)
                 if run_id % 100 == 0:
-                    run_exp(net)
+                    exp.run_net(net_generator, 1)
             K.clear_session()
 
     if False:

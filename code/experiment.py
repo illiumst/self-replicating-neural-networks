@@ -4,15 +4,21 @@ import dill
 from tqdm import tqdm
 import copy
 
+from tensorflow.python.keras import backend as K
+
 from abc import ABC, abstractmethod
 
 
-class _BaseExperiment(ABC):
+class Experiment(ABC):
 
     @staticmethod
     def from_dill(path):
         with open(path, "rb") as dill_file:
             return dill.load(dill_file)
+
+    @staticmethod
+    def reset_model():
+        K.clear_session()
 
     def __init__(self, name=None, ident=None):
         self.experiment_id = f'{ident or ""}_{time.time()}'
@@ -59,22 +65,27 @@ class _BaseExperiment(ABC):
                 dill.dump(value, dill_file)
 
     @abstractmethod
-    def run_net(self, network, iterations, run_id=0):
+    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
         raise NotImplementedError
         pass
 
+    def run_exp(self, network_generator, exp_iterations, prints=False, **kwargs):
+        # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
+        for run_id in range(exp_iterations):
+            network = network_generator()
+            self.run_net(network, 100, run_id=run_id + 1, **kwargs)
+            self.historical_particles[run_id] = network
+            if prints:
+                print("Fixpoint? " + str(network.is_fixpoint()))
+        self.reset_model()
 
-class Experiment(_BaseExperiment):
-
-    def __init__(self, **kwargs):
-        super(Experiment, self).__init__(**kwargs)
-        pass
-
-    def run_net(self, network, iterations, run_id=0):
-        pass
+    def reset_all(self):
+        self.reset_model()
 
 
 class FixpointExperiment(Experiment):
+    if kwargs.get('logging', False):
+        self.log(self.counters)
 
     def __init__(self, **kwargs):
         kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
@@ -82,7 +93,7 @@ class FixpointExperiment(Experiment):
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
 
-    def run_net(self, net, step_limit=100, run_id=0):
+    def run_net(self, net, step_limit=100, run_id=0, **kwargs):
         i = 0
         while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
             net.self_attack()
@@ -105,31 +116,56 @@ class FixpointExperiment(Experiment):
         else:
             self.counters['other'] += 1
 
+    def reset_counters(self):
+        for key in self.counters.keys():
+            self.counters[key] = 0
+        return True
+
+    def reset_all(self):
+        super(FixpointExperiment, self).reset_all()
+        self.reset_counters()
+
 
 class MixedFixpointExperiment(FixpointExperiment):
 
-    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0):
-
-        i = 0
-        while i < step_limit and not net.is_diverged() and not net.is_fixpoint():
+    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
+        for i in range(step_limit):
+            if net.is_diverged() or net.is_fixpoint():
+                break
             net.self_attack()
             with tqdm(postfix=["Loss", dict(value=0)]) as bar:
                 for _ in range(trains_per_application):
                     loss = net.compiled().train()
                     bar.postfix[1]["value"] = loss
                     bar.update()
-            i += 1
             if run_id:
                 net.save_state()
         self.count(net)
 
 
 class SoupExperiment(Experiment):
-    pass
+
+    def __init__(self, **kwargs):
+        super(SoupExperiment, self).__init__(name=kwargs.get('name', self.__class__.__name__))
+
+    def run_exp(self, network_generator, exp_iterations, soup_generator=None, soup_iterations=0, prints=False):
+        for i in range(soup_iterations):
+            soup = soup_generator()
+            soup.seed()
+            for _ in tqdm(exp_iterations):
+                soup.evolve()
+            self.log(soup.count())
+            self.save(soup=soup.without_particles())
+
+    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
+        raise NotImplementedError
+        pass
 
 
 class IdentLearningExperiment(Experiment):
 
     def __init__(self):
         super(IdentLearningExperiment, self).__init__(name=self.__class__.__name__)
-    pass
+
+    def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
+        pass
