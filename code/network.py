@@ -1,9 +1,9 @@
 import numpy as np
 
-from keras.models import Sequential
-from keras.callbacks import Callback
-from keras.layers import SimpleRNN, Dense
-import keras.backend as K
+from tensorflow.python.keras.models import Sequential
+from tensorflow.python.keras.callbacks import Callback
+from tensorflow.python.keras.layers import SimpleRNN, Dense
+from tensorflow.python.keras import backend as K
 
 from util import *
 from experiment import *
