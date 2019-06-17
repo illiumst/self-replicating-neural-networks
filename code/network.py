@@ -1,12 +1,11 @@
 import numpy as np
 from abc import abstractmethod, ABC
-from typing import List, Union
+from typing import List, Union, Tuple
 from types import FunctionType
 
 from tensorflow.python.keras.models import Sequential
 from tensorflow.python.keras.callbacks import Callback
 from tensorflow.python.keras.layers import SimpleRNN, Dense
-from tensorflow.python.keras import backend as K
 
 from experiment import *
 
@@ -28,103 +27,79 @@ class SaveStateCallback(Callback):
         return
 
 
-class Weights:
+class WeightToolBox:
 
-    @staticmethod
-    def __reshape_flat_array__(array, shapes):
-        sizes: List[int] = [int(np.prod(shape)) for shape in shapes]
-        # Split the incoming array into slices for layers
-        slices = [array[x: y] for x, y in zip(np.cumsum([0]+sizes), np.cumsum([0]+sizes)[1:])]
-        # reshape them in accordance to the given shapes
-        weights = [np.reshape(weight_slice, shape) for weight_slice, shape in zip(slices, shapes)]
-        return weights
-
-    def __init__(self, weight_vector: Union[List[np.ndarray], np.ndarray], flat_array_shape=None):
+    def __init__(self):
         """
         Weight class, for easy manipulation of weight vectors from Keras models
-
-        :param weight_vector: A numpy array holding weights
-        :type weight_vector: List[np.ndarray]
         """
-        self.__iter_idx = [0, 0]
-        if flat_array_shape:
-            weight_vector = self.__reshape_flat_array__(weight_vector, flat_array_shape)
-
-        self.layers = weight_vector
 
         # TODO: implement a way to access the cells directly
         # self.cells = len(self)
         # TODO: implement a way to access the weights directly
         # self.weights = self.to_flat_array() ?
 
-    def __iter__(self):
-        self.__iter_idx = [0, 0]
-        return self
+    @staticmethod
+    def max(weights: List[np.ndarray]):
+        np.max(weights)
 
-    def __getitem__(self, item):
-        return self.layers[item]
+    @staticmethod
+    def avg(weights: List[np.ndarray]):
+        return np.average(weights)
 
-    def max(self):
-        np.max(self.layers)
+    @staticmethod
+    def weight_amount(weights: List[np.ndarray]):
+        return np.sum([x.size for x in weights])
 
-    def avg(self):
-        return np.average(self.layers)
+    @staticmethod
+    def len(weights: List[np.ndarray]):
+        return sum([x.size for x in weights])
 
-    def __len__(self):
-        return sum([x.size for x in self.layers])
+    @staticmethod
+    def shapes(weights: List[np.ndarray]):
+        return [x.shape for x in weights]
 
-    def shapes(self):
-        return [x.shape for x in self.layers]
+    @staticmethod
+    def num_layers(weights: List[np.ndarray]):
+        return len(weights)
 
-    def num_layers(self):
-        return len(self.layers)
+    def repr(self, weights: List[np.ndarray]):
+        return f'Weights({self.to_flat_array(weights).tolist()})'
 
-    def __copy__(self):
-        return copy.deepcopy(self)
+    @staticmethod
+    def to_flat_array(weights: List[np.ndarray]) -> np.ndarray:
+        return np.hstack([weight.flatten() for weight in weights])
 
-    def __next__(self):
-        # ToDo: Check iteration progress over layers
-        # ToDo: There is still a problem interation, currently only cell level is the last loop stage.
-        # Do we need this?
-        if self.__iter_idx[0] >= len(self.layers):
-            if self.__iter_idx[1] >= len(self.layers[self.__iter_idx[0]]):
-                raise StopIteration
-        result = self.layers[self.__iter_idx[0]][self.__iter_idx[1]]
+    @staticmethod
+    def reshape_flat_array(array, shapes) -> List[np.ndarray]:
+        sizes: List[int] = [int(np.prod(shape)) for shape in shapes]
+        # Split the incoming array into slices for layers
+        slices = [array[x: y] for x, y in zip(np.cumsum([0] + sizes), np.cumsum([0] + sizes)[1:])]
+        # reshape them in accordance to the given shapes
+        weights = [np.reshape(weight_slice, shape) for weight_slice, shape in zip(slices, shapes)]
+        return weights
 
-        if self.__iter_idx[1] >= len(self.layers[self.__iter_idx[0]]):
-            self.__iter_idx[0] += 1
-            self.__iter_idx[1] = 0
-        else:
-            self.__iter_idx[1] += 1
-        return result
+    def reshape_flat_array_like(self, array, weights: List[np.ndarray]) -> List[np.ndarray]:
+        return self.reshape_flat_array(array, self.shapes(weights))
 
-    def __repr__(self):
-        return f'Weights({self.to_flat_array().tolist()})'
-
-    def to_flat_array(self) -> np.ndarray:
-        return np.hstack([weight.flatten() for weight in self.layers])
-
-    def from_flat_array(self, array):
-        new_weights = self.__reshape_flat_array__(array, self.shapes())
-        return new_weights
-
-    def shuffle(self):
-        flat = self.to_flat_array()
+    def shuffle_weights(self, weights: List[np.ndarray]):
+        flat = self.to_flat_array(weights)
         np.random.shuffle(flat)
-        self.from_flat_array(flat)
-        return True
+        return self.reshape_flat_array_like(flat, weights)
 
-    def are_diverged(self):
-        return any([np.isnan(x).any() for x in self.layers]) or any([np.isinf(x).any() for x in self.layers])
+    @staticmethod
+    def are_diverged(weights: List[np.ndarray]) -> bool:
+        return any([np.isnan(x).any() for x in weights]) or any([np.isinf(x).any() for x in weights])
 
-    def are_within_bounds(self, lower_bound: float, upper_bound: float):
-        return bool(sum([((lower_bound < x) & (x > upper_bound)).size for x in self.layers]))
+    @staticmethod
+    def are_within_bounds(weights: List[np.ndarray], lower_bound: float, upper_bound: float) -> bool:
+        return bool(sum([((lower_bound < x) & (x > upper_bound)).size for x in weights]))
 
-    def aggregate_by(self, func: FunctionType, num_aggregates):
-        collection_sizes = len(self) // num_aggregates
-        weights = self.to_flat_array()[:collection_sizes * num_aggregates].reshape((num_aggregates, -1))
+    def aggregate_weights_by(self, weights: List[np.ndarray], func: FunctionType, num_aggregates: int):
+        collection_sizes = self.len(weights) // num_aggregates
+        weights = self.to_flat_array(weights)[:collection_sizes * num_aggregates].reshape((num_aggregates, -1))
         aggregated_weights = func(weights, num_aggregates)
-        left_overs = self.to_flat_array()[collection_sizes * num_aggregates:]
+        left_overs = self.to_flat_array(weights)[collection_sizes * num_aggregates:]
         return aggregated_weights, left_overs
 
 
@@ -156,14 +131,14 @@ class NeuralNetwork(ABC):
         self.keras_params.update(kwargs)
         return self
 
-    def get_weights(self) -> Weights:
-        return Weights(self.model.get_weights())
+    def get_weights(self) -> List[np.ndarray]:
+        return self.model.get_weights()
 
     def get_weights_flat(self) -> np.ndarray:
-        return self.get_weights().to_flat_array()
+        return weightToolBox.to_flat_array(self.get_weights())
 
-    def set_weights(self, new_weights: Weights):
-        return self.model.set_weights(new_weights.layers)
+    def set_weights(self, new_weights: List[np.ndarray]):
+        return self.model.set_weights(new_weights)
 
     @abstractmethod
     def get_samples(self):
@@ -171,11 +146,11 @@ class NeuralNetwork(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def apply_to_weights(self, old_weights) -> Weights:
+    def apply_to_weights(self, old_weights) -> List[np.ndarray]:
         # TODO: add a dogstring, telling the user what this does, e.g. what is applied?
         raise NotImplementedError
 
-    def apply_to_network(self, other_network) -> Weights:
+    def apply_to_network(self, other_network) -> List[np.ndarray]:
         # TODO: add a dogstring, telling the user what this does, e.g. what is applied?
         new_weights = self.apply_to_weights(other_network.get_weights())
         return new_weights
@@ -202,11 +177,11 @@ class NeuralNetwork(ABC):
         return self.attack(new_other_network)
 
     def is_diverged(self):
-        return self.get_weights().are_diverged()
+        return weightToolBox.are_diverged(self.get_weights())
 
     def is_zero(self, epsilon=None):
         epsilon = epsilon or self.get_params().get('epsilon')
-        return self.get_weights().are_within_bounds(-epsilon, epsilon)
+        return weightToolBox.are_within_bounds(self.get_weights(), -epsilon, epsilon)
 
     def is_fixpoint(self, degree: int = 1, epsilon: float = None) -> bool:
         assert degree >= 1, "degree must be >= 1"
@@ -216,16 +191,17 @@ class NeuralNetwork(ABC):
 
         for _ in range(degree):
             new_weights = self.apply_to_weights(new_weights)
-            if new_weights.are_diverged():
+            if weightToolBox.are_diverged(new_weights):
                 return False
 
-        biggerEpsilon = (np.abs(new_weights.to_flat_array() - self.get_weights().to_flat_array()) >= epsilon).any()
+        biggerEpsilon = (np.abs(weightToolBox.to_flat_array(new_weights) - weightToolBox.to_flat_array(self.get_weights()))
+                         >= epsilon).any()
 
         # Boolean Value needs to be flipped to answer "is_fixpoint"
         return not biggerEpsilon
 
     def print_weights(self, weights=None):
-        print(weights or self.get_weights())
+        print(weightToolBox.repr(weights or self.get_weights()))
 
 
 class ParticleDecorator:
@@ -292,23 +268,23 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
         # TODO: Write about it... What does it do?
         return self.model.predict(inputs)
 
-    def get_samples(self):
-        weights = self.get_weights()
+    def get_samples(self, weights: List[np.ndarray] = None):
+        weights = weights or self.get_weights()
         sample = np.asarray([
-            [weight, idx, *x] for idx, layer in enumerate(weights.layers) for x, weight in np.ndenumerate(layer)
+            [weight, idx, *x] for idx, layer in enumerate(weights) for x, weight in np.ndenumerate(layer)
         ])
         # normalize [layer, cell, position]
         for idx in range(1, sample.shape[1]):
             sample[:, idx] = sample[:, idx] / np.max(sample[:, idx])
         return sample, sample
 
-    def apply_to_weights(self, weights) -> Weights:
+    def apply_to_weights(self, weights) -> List[np.ndarray]:
         # ToDo: Insert DocString
         # Transform the weight matrix in an horizontal stack as: array([[weight, layer, cell, position], ...])
-        transformed_weights = self.get_samples()[0]
-        new_weights = self.apply(transformed_weights)
+        transformed_weights = self.get_samples(weights)[0]
+        new_flat_weights = self.apply(transformed_weights)
         # use the original weight shape to transform the new tensor
-        return Weights(new_weights, flat_array_shape=weights.shapes())
+        return weightToolBox.reshape_flat_array_like(new_flat_weights, weights)
 
 
 class AggregatingNeuralNetwork(NeuralNetwork):
@@ -334,7 +310,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         return np.hstack([aggregate for _ in range(amount)])[0]
 
     @staticmethod
-    def shuffle_not(weights: Weights):
+    def shuffle_not(weights: List[np.ndarray]):
         """
         Doesn't do a thing. f(x)
 
@@ -346,8 +322,8 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         return weights
 
     @staticmethod
-    def shuffle_random(weights: Weights):
-        assert weights.shuffle()
+    def shuffle_random(weights: List[np.ndarray]):
+        weights = weightToolBox.shuffle_weights(weights)
         return weights
 
     def __init__(self, aggregates, width, depth, **kwargs):
@@ -371,16 +347,16 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         return self.params.get('shuffler', self.shuffle_not)
 
     def get_amount_of_weights(self):
-        return len(self.get_weights())
+        return weightToolBox.weight_amount(self.get_weights())
 
     def apply(self, inputs):
         # You need to add an dimension here... "..." copies array values
         return self.model.predict(inputs[None, ...])
 
     def get_aggregated_weights(self):
-        return self.get_weights().aggregate_by(self.get_aggregator(), self.aggregates)
+        return weightToolBox.aggregate_weights_by(self.get_weights(), self.get_aggregator(), self.aggregates)
 
-    def apply_to_weights(self, old_weights) -> Weights:
+    def apply_to_weights(self, old_weights) -> List[np.ndarray]:
 
         # build aggregations of old_weights
         old_aggregations, leftovers = self.get_aggregated_weights()
@@ -391,8 +367,8 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         new_aggregations = self.deaggregate_identically(new_aggregations, collection_sizes)
         # generate new weights
         # only include leftovers if there are some then coonvert them to Weight on base of th old shape
-        new_weights = Weights(new_aggregations if not leftovers.shape[0] else np.hstack((new_aggregations, leftovers)),
-                              flat_array_shape=old_weights.shapes())
+        complete_weights =  new_aggregations if not leftovers.shape[0] else np.hstack((new_aggregations, leftovers))
+        new_weights = weightToolBox.reshape_flat_array_like(complete_weights, old_weights)
 
         # maybe shuffle
         new_weights = self.get_shuffler()(new_weights)
@@ -413,7 +389,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
 
         for _ in range(degree):
             new_weights = self.apply_to_weights(new_weights)
-            if new_weights.are_diverged():
+            if weightToolBox.are_diverged(new_weights):
                 return False
 
         new_aggregations, leftovers = self.get_aggregated_weights()
@@ -529,27 +505,29 @@ class TrainingNeuralNetworkDecorator:
         return history.history['loss'][-1]
 
 
+weightToolBox = WeightToolBox()
+
 if __name__ == '__main__':
 
-    if True:
+    if False:
         # WeightWise Neural Network
-        net_generator = lambda : ParticleDecorator(
+        net_generator = lambda: ParticleDecorator(
             WeightwiseNeuralNetwork(width=2, depth=2
                                     ).with_keras_params(activation='linear'))
         with FixpointExperiment() as exp:
             exp.run_exp(net_generator, 10, logging=True)
             exp.reset_all()
 
-    if True:
+    if False:
         # Aggregating Neural Network
-        net_generator = lambda :ParticleDecorator(
+        net_generator = lambda: ParticleDecorator(
             AggregatingNeuralNetwork(aggregates=4, width=2, depth=2
                                      ).with_keras_params())
         with FixpointExperiment() as exp:
             exp.run_exp(net_generator, 10, logging=True)
             exp.reset_all()
 
-    if True:
+    if False:
         # FFT Aggregation
         net_generator = lambda: ParticleDecorator(
             AggregatingNeuralNetwork(
@@ -564,19 +542,19 @@ if __name__ == '__main__':
     if True:
         # ok so this works quite realiably
         run_count = 10000
-        net_generator = lambda : TrainingNeuralNetworkDecorator(
+        net_generator = lambda: TrainingNeuralNetworkDecorator(
             ParticleDecorator(WeightwiseNeuralNetwork(width=2, depth=2)
                               )).with_params(epsilon=0.0001).with_keras_params(optimizer='sgd')
         with MixedFixpointExperiment() as exp:
             for run_id in tqdm(range(run_count+1)):
                 exp.run_exp(net_generator, 1)
                 if run_id % 100 == 0:
-                    exp.run_net(net_generator, 1)
+                    exp.run_exp(net_generator, 1)
             K.clear_session()
 
-    if False:
+    if True:
         with FixpointExperiment() as exp:
-            run_count = 1000
+            run_count = 100
             net = TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, width=2, depth=2)).with_params(epsilon=0.1e-6)
             for run_id in tqdm(range(run_count+1)):
                 loss = net.compiled().train()
@@ -596,7 +574,7 @@ if __name__ == '__main__':
         # TODO: Wtf is happening here?
         with FixpointExperiment() as exp:
             run_count = 10000
-            net = TrainingNeuralNetworkDecorator(RecurrentNeuralNetwork(width=2, depth=2))\
+            net = TrainingNeuralNetworkDecorator(RecurrentNeuralNetwork(width=2, depth=2)) \
                 .with_params(epsilon=0.1e-2).with_keras_params(optimizer='sgd', activation='linear')
             for run_id in tqdm(range(run_count+1)):
                 loss = net.compiled().train()
@@ -606,16 +584,3 @@ if __name__ == '__main__':
                     print("Fixpoint? " + str(net.is_fixpoint()))
                     print("Loss " + str(loss))
                     print()
-    if False:
-        # and this gets somewhat interesting... we can still achieve non-trivial fixpoints
-        # over multiple applications when training enough in-between
-        with MixedFixpointExperiment() as exp:
-            for run_id in range(10):
-                net = TrainingNeuralNetworkDecorator(FFTNeuralNetwork(2, width=2, depth=2))\
-                    .with_params(epsilon=0.0001, activation='sigmoid')
-                exp.run_net(net, 500, 10)
-
-                net.print_weights()
-
-                print("Fixpoint? " + str(net.is_fixpoint()))
-            exp.log(exp.counters)
