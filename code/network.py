@@ -171,7 +171,7 @@ class NeuralNetwork(ABC):
         return not biggerEpsilon
 
     def aggregate_weights_by(self, weights: List[np.ndarray], func: FunctionType, num_aggregates: int):
-        collection_sizes = self.len(weights) // num_aggregates
+        collection_sizes = self.weight_amount(weights) // num_aggregates
         flat = self.weights_to_flat_array(weights)
         weights = flat[:collection_sizes * num_aggregates].reshape((num_aggregates, -1))
         left_overs = flat[collection_sizes * num_aggregates:]
