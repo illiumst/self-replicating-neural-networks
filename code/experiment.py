@@ -167,10 +167,11 @@ class SoupExperiment(Experiment):
         for i in range(soup_iterations):
             soup = soup_generator()
             soup.seed()
-            for _ in tqdm(exp_iterations):
+            for _ in tqdm(range(exp_iterations)):
                 soup.evolve()
             self.log(soup.count())
             self.save(soup=soup.without_particles())
+            K.clear_session()
 
     def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
         raise NotImplementedError

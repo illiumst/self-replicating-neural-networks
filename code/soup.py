@@ -67,7 +67,6 @@ class Soup(object):
                     description['action'] = 'learn_from'
                     description['counterpart'] = other_particle.get_uid()
                 for _ in range(self.params.get('train', 0)):
-                    particle.compiled()
                     # callbacks on save_state are broken for TrainingNeuralNetwork
                     loss = particle.train(store_states=False)
                     description['fitted'] = self.params.get('train', 0)
@@ -110,28 +109,30 @@ class Soup(object):
 
 if __name__ == '__main__':
     if True:
-        net_generator = lambda: WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
-        soup_generator = Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True)
-        exp = SoupExperiment()
-        exp.run_exp(net_generator, 10, soup_generator, 1, False)
+        with SoupExperiment(name='soup') as exp:
+            net_generator = lambda: TrainingNeuralNetworkDecorator(
+                WeightwiseNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+            )
+            soup_generator = lambda: Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True)
+            exp.run_exp(net_generator, 10, soup_generator, 1, False)
 
-        # net_generator = lambda: FFTNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
-        # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid')\
-        # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
-        # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+            # net_generator = lambda: FFTNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+            # net_generator = lambda: AggregatingNeuralNetwork(4, 2, 2).with_keras_params(activation='sigmoid')\
+            # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
+            # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
 
     if True:
-        net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2)) \
-            .with_keras_params(activation='linear').with_params(epsilon=0.0001)
-        soup_generator = lambda: Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
-        exp = SoupExperiment(name="soup")
+        with SoupExperiment(name='soup') as exp:
+            net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(2, 2)) \
+                .with_keras_params(activation='linear').with_params(epsilon=0.0001)
+            soup_generator = lambda: Soup(10, net_generator).with_params(remove_divergent=True, remove_zero=True, train=20)
 
-        exp.run_exp(net_generator, 10, soup_generator, 1, False)
+            exp.run_exp(net_generator, 10, soup_generator, 1, False)
 
-        # net_generator = lambda: TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, 2, 2))
-        # .with_keras_params(activation='linear')\
-        # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
-        # net_generator = lambda: TrainingNeuralNetworkDecorator(FFTNeuralNetwork(4, 2, 2))\
-        #     .with_keras_params(activation='linear')\
-        # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
-        # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+            # net_generator = lambda: TrainingNeuralNetworkDecorator(AggregatingNeuralNetwork(4, 2, 2))
+            # .with_keras_params(activation='linear')\
+            # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
+            # net_generator = lambda: TrainingNeuralNetworkDecorator(FFTNeuralNetwork(4, 2, 2))\
+            #     .with_keras_params(activation='linear')\
+            # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
+            # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()

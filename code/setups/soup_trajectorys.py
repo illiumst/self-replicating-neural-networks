@@ -29,3 +29,4 @@ if __name__ == '__main__':
             #             or soup.historical_particles[particle_uid].states[time_step]['weights']
             # from soup.dill
             exp.save(soup=soup.without_particles())
+            K.clear_session()
