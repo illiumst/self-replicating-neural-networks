@@ -1,4 +1,8 @@
 import random
+from operator import mul
+from functools import reduce
+
+from tensorflow.python.keras.layers import Dense, Dropout, BatchNormalization
 
 from network import *
 
@@ -17,6 +21,7 @@ class Soup(object):
         self.params = dict(attacking_rate=0.1, learn_from_rate=0.1, train=0, learn_from_severity=1)
         self.params.update(kwargs)
         self.time = 0
+        self.is_seeded = False
 
     def __copy__(self):
         copy_ = Soup(self.size, self.generator, **self.params)
@@ -43,9 +48,13 @@ class Soup(object):
         return self.historical_particles.get(uid, otherwise)
     
     def seed(self):
-        self.particles = []
-        for _ in range(self.size):
-            self.particles += [self.generate_particle()]
+        if not self.is_seeded:
+            self.particles = []
+            for _ in range(self.size):
+                self.particles += [self.generate_particle()]
+        else:
+            print('already seeded!')
+        self.is_seeded = True
         return self       
     
     def evolve(self, iterations=1):
@@ -59,6 +68,7 @@ class Soup(object):
                     particle.attack(other_particle)
                     description['action'] = 'attacking'
                     description['counterpart'] = other_particle.get_uid()
+
                 if prng() < self.params.get('learn_from_rate'):
                     other_particle_id = int(prng() * len(self.particles))
                     other_particle = self.particles[other_particle_id]
@@ -66,6 +76,7 @@ class Soup(object):
                         particle.learn_from(other_particle)
                     description['action'] = 'learn_from'
                     description['counterpart'] = other_particle.get_uid()
+
                 for _ in range(self.params.get('train', 0)):
                     # callbacks on save_state are broken for TrainingNeuralNetwork
                     loss = particle.train(store_states=False)
@@ -73,11 +84,13 @@ class Soup(object):
                     description['loss'] = loss
                     description['action'] = 'train_self'
                     description['counterpart'] = None
+
                 if self.params.get('remove_divergent') and particle.is_diverged():
                     new_particle = self.generate_particle()
                     self.particles[particle_id] = new_particle
                     description['action'] = 'divergent_dead'
                     description['counterpart'] = new_particle.get_uid()
+
                 if self.params.get('remove_zero') and particle.is_zero():
                     new_particle = self.generate_particle()
                     self.particles[particle_id] = new_particle
@@ -105,6 +118,56 @@ class Soup(object):
         for particle in self.particles:
             particle.print_weights()
             print(particle.is_fixpoint())
+
+
+class SolvingSoup(Soup):
+
+    def __init__(self, task: Task, particle_amount: int, particle_generator, depth: int=None, **kwargs):
+        super(SolvingSoup, self).__init__(particle_amount, particle_generator, **kwargs)
+        self.model = Sequential()
+        self.depth = depth or particle_amount - 1
+        self.task = task
+
+        self.network_params = dict()
+        self.compile_params = dict(loss='mse', optimizer='sgd')
+        self.compile_params.update(kwargs.get('compile_params', {}))
+
+    def with_network_params(self, **params):
+        self.network_params.update(params)
+
+    def seed(self):
+        super(SolvingSoup, self).seed()
+
+        # Static First Layer
+        self.model.add(Dense(self.network_params.get('first_layer_units', 10), input_shape=self.task.input_shape))
+        self.model.add(BatchNormalization())
+
+        for layer_num in range(self.depth):
+            # ToDo !!!!!!!!!!
+            self.model.add(Dense())
+            self.model.add(Dropout(rate=self.params.get('sparsity_rate', 0.1)))
+
+        has_to_be_zero =
+
+        if has_to_be_zero:
+            raise ValueError(f'This Combination does not Work!, There are still {has_to_be_zero} unnassigned Weights!')
+        self.model.add(Dense(left_over_units))
+        self.model.add(Dense(self.task.output_shape))
+        pass
+
+    def compile_model(self, **kwargs):
+        compile_params = copy.deepcopy(self.compile_params)
+        compile_params.update(kwargs)
+        return self.model.compile(**compile_params)
+
+    def get_total_weight_amount(self):
+        if self.is_seeded:
+            return sum([x.get_amount_of_weights for x in self.particles])
+
+    def predict(self, x):
+        return self.model.predict(x)
+
+
 
 
 if __name__ == '__main__':
@@ -136,3 +199,4 @@ if __name__ == '__main__':
             #     .with_keras_params(activation='linear')\
             # .with_params(shuffler=AggregatingNeuralNetwork.shuffle_random)
             # net_generator = lambda: RecurrentNeuralNetwork(2, 2).with_keras_params(activation='linear').with_params()
+

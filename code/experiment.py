@@ -24,7 +24,7 @@ class Experiment(ABC):
     def reset_model():
         K.clear_session()
 
-    def __init__(self, name=None, ident=None):
+    def __init__(self, name=None, ident=None, **kwargs):
         self.experiment_id = f'{ident or ""}_{time.time()}'
         self.experiment_name = name or 'unnamed_experiment'
         self.next_iteration = 0
@@ -73,11 +73,11 @@ class Experiment(ABC):
         raise NotImplementedError
         pass
 
-    def run_exp(self, network_generator, exp_iterations, step_limit=100, prints=False, reset_model=False):
+    def run_exp(self, network_generator, exp_iterations, step_limit=100, prints=False, reset_model=False, **kwargs):
         # INFO Run_ID needs to be more than 0, so that exp stores the trajectories!
         for run_id in range(exp_iterations):
             network = network_generator()
-            self.run_net(network, step_limit, run_id=run_id + 1)
+            self.run_net(network, step_limit, run_id=run_id + 1, **kwargs)
             self.historical_particles[run_id] = network
             if prints:
                 print("Fixpoint? " + str(network.is_fixpoint()))
@@ -96,12 +96,13 @@ class FixpointExperiment(Experiment):
         self.counters = dict(divergent=0, fix_zero=0, fix_other=0, fix_sec=0, other=0)
         self.interesting_fixpoints = []
 
-    def run_exp(self, network_generator, exp_iterations, logging=True, **kwargs):
+    def run_exp(self, network_generator, exp_iterations, logging=True, reset_model=False, **kwargs):
         kwargs.update(reset_model=False)
         super(FixpointExperiment, self).run_exp(network_generator, exp_iterations, **kwargs)
         if logging:
             self.log(self.counters)
-        self.reset_model()
+        if reset_model:
+            self.reset_model()
 
     def run_net(self, net, step_limit=100, run_id=0, **kwargs):
         if len(kwargs):
@@ -109,7 +110,7 @@ class FixpointExperiment(Experiment):
         for i in range(step_limit):
             if net.is_diverged() or net.is_fixpoint():
                 break
-            net.self_attack()
+            net.set_weights(net.apply_to_weights(net.get_weights()))
             if run_id:
                 net.save_state(time=i)
         self.count(net)
@@ -141,30 +142,69 @@ class FixpointExperiment(Experiment):
 class MixedFixpointExperiment(FixpointExperiment):
 
     def __init__(self, **kwargs):
-        super(MixedFixpointExperiment, self).__init__(name=kwargs.get('name', self.__class__.__name__))
+        kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
+        super(MixedFixpointExperiment, self).__init__(**kwargs)
 
-    def run_net(self, net, step_limit=100, run_id=0, **kwargs):
-        for i in range(step_limit):
+    def run_net(self, net, step_limit=100, run_id=0, trains_per_application=100, **kwargs):
+        assert hasattr(net, 'train'), 'This Network must be trainable, i.e. use the "TrainingNeuralNetworkDecorator"!'
+
+        for evolution_step in range(step_limit):
+            net.set_weights(net.apply_to_weights(net.get_weights()))
             if net.is_diverged() or net.is_fixpoint():
                 break
-            net.self_attack()
-            with tqdm(postfix=["Loss", dict(value=0)]) as bar:
-                for _ in range(kwargs.get('trains_per_application', 100)):
-                    loss = net.train()
-                    bar.postfix[1]["value"] = loss
+            epoch_num = run_id * trains_per_application * evolution_step
+            with tqdm(postfix={"epoch": 0, "loss": 0, None: None},
+                      bar_format="This Epoch:{postfix[epoch]} Loss: {postfix[loss]}%|{r_bar}") as bar:
+                for epoch in range(epoch_num, epoch_num + trains_per_application):
+                    loss = net.train(epoch=epoch)
+                    bar.postfix.update(epoch=epoch, loss=loss)
                     bar.update()
-            if run_id:
+            if run_id and hasattr(net, 'save_sate'):
                 net.save_state()
         self.count(net)
+
+
+class TaskExperiment(MixedFixpointExperiment):
+
+    def __init__(self, **kwargs):
+        kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
+        super(TaskExperiment, self).__init__(**kwargs)
+        self.task_performance = []
+        self.self_performance = []
+
+    def run_exp(self, network_generator, exp_iterations, logging=True, reset_model=False, **kwargs):
+        kwargs.update(reset_model=False, logging=logging)
+        super(FixpointExperiment, self).run_exp(network_generator, exp_iterations, **kwargs)
+        if reset_model:
+            self.reset_model()
+        pass
+
+    def run_net(self, net, step_limit=100, run_id=0, **kwargs):
+        assert hasattr(net, 'evaluate')
+        kwargs.update(step_limit=step_limit, run_id=run_id)
+        super(TaskExperiment, self).run_net(net, **kwargs)
+
+        # Get Performance without Training
+        selfX, selfY = net.get_samples(self_samples=True)
+
+        self.task_performance.append(net.evaluate(*net.get_samples(task_samples=True),
+                                                  batchsize=net.get_amount_of_weights()))
+        self.self_performance.append(net.evaluate(*net.get_samples(self_samples=True),
+                                                  batchsize=net.get_amount_of_weights()))
+        pass
 
 
 class SoupExperiment(Experiment):
 
     def __init__(self, **kwargs):
-        super(SoupExperiment, self).__init__(name=kwargs.get('name', self.__class__.__name__))
+        kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
+        super(SoupExperiment, self).__init__(**kwargs)
 
-    def run_exp(self, network_generator, exp_iterations, soup_generator=None, soup_iterations=0, prints=False):
+    def run_exp(self, network_generator, exp_iterations,
+                soup_generator=None, soup_iterations=0, prints=False, **kwargs):
         for i in range(soup_iterations):
+            if not soup_generator:
+                raise ValueError('A Soup Generator needs to be given!')
             soup = soup_generator()
             soup.seed()
             for _ in tqdm(range(exp_iterations)):
@@ -181,7 +221,8 @@ class SoupExperiment(Experiment):
 class IdentLearningExperiment(Experiment):
 
     def __init__(self, **kwargs):
-        super(IdentLearningExperiment, self).__init__(name=kwargs.get('name', self.__class__.__name__))
+        kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
+        super(IdentLearningExperiment, self).__init__(**kwargs)
 
     def run_net(self, net, trains_per_application=100, step_limit=100, run_id=0, **kwargs):
         pass
