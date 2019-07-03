@@ -3,6 +3,7 @@ import numpy as np
 from abc import abstractmethod, ABC
 from typing import List, Union, Tuple
 from types import FunctionType
+import warnings
 
 # Functions and Operators
 from operator import mul
@@ -36,6 +37,25 @@ class SaveStateCallback(Callback):
         description['counterpart'] = None
         self.net.save_state(**description)
         return
+
+
+class EarlyStoppingByInfNanLoss(Callback):
+    def __init__(self, monitor='loss', verbose=0):
+        super(Callback, self).__init__()
+        self.monitor = monitor
+        self.verbose = verbose
+
+    def on_epoch_end(self, epoch, logs: dict = None):
+        logs = logs or dict()
+        current = logs.get(self.monitor)
+        if current is None:
+            warnings.warn(f'Early stopping requires {self.monitor} available!', RuntimeWarning)
+            pass
+
+        if np.isnan(current) or np.isinf(current):
+            if self.verbose > 0:
+                print(f'Epoch {epoch}: early stopping THR')
+            self.model.stop_training = True
 
 
 class NeuralNetwork(ABC):
@@ -84,7 +104,7 @@ class NeuralNetwork(ABC):
 
     def __init__(self, **params):
         super().__init__()
-        self.params = dict(epsilon=0.00000000000001)
+        self.params = dict(epsilon=0.00000000000001, early_nan_stopping=True, store_states=False)
         self.params.update(params)
         self.name = params.get('name', self.__class__.__name__)
         self.keras_params = dict(activation='linear', use_bias=False)
@@ -233,21 +253,23 @@ class ParticleDecorator:
     def get_states(self):
         return self.states
 
-    def attack(self, other_network):
+    def attack(self, other_network, iterations: int = 1):
         """
         Set a networks weights based on the output of the application of my function to its weights.
         "Alter a networks weights based on my evaluation"
         :param other_network:
+        :param iterations:
         :return:
         """
-        other_network.set_weights(self.apply_to_network(other_network))
+        for _ in range(iterations):
+            other_network.set_weights(self.apply_to_network(other_network))
         return self
 
-    def self_attack(self, iterations=1):
+    def self_attack(self, iterations: int = 1):
         """
         Set my weights based on the output of the application of my function to its weights.
         "Alter my network weights based on my evaluation"
-        :param other_network:
+        :param iterations:
         :return:
         """
         for _ in range(iterations):
@@ -255,7 +277,7 @@ class ParticleDecorator:
         return self
 
 
-class TaskDecorator(TaskAdditionOf2):
+class TaskDecorator(ParticleTaskAdditionOf2):
 
     def __init__(self, network, **kwargs):
         super(TaskDecorator, self).__init__(**kwargs)
@@ -271,12 +293,21 @@ class TaskDecorator(TaskAdditionOf2):
 
         if task_samples:
             return super(TaskDecorator, self).get_samples()
+
         elif self_samples:
             return self.network.get_samples()
-        elif prng() >= kwargs.get('split', 0.5):
-            return super(TaskDecorator, self).get_samples()
+
         else:
-            return self.network.get_samples()
+            self_x, self_y = self.network.get_samples()
+            task_x, task_y = super(TaskDecorator, self).get_samples()
+
+            amount_of_weights = self.network.get_amount_of_weights()
+            random_idx = np.random.choice(np.arange(amount_of_weights), amount_of_weights//2)
+
+            x = self_x[random_idx] = task_x[random_idx]
+            y = self_y[random_idx] = task_y[random_idx]
+
+            return x, y
 
 
 class WeightwiseNeuralNetwork(NeuralNetwork):
@@ -304,7 +335,7 @@ class WeightwiseNeuralNetwork(NeuralNetwork):
         # normalize [layer, cell, position]
         for idx in range(1, sample.shape[1]):
             sample[:, idx] = sample[:, idx] / np.max(sample[:, idx])
-        return sample, sample
+        return sample, sample[:, 0]
 
     def apply_to_weights(self, weights) -> List[np.ndarray]:
         # ToDo: Insert DocString
@@ -427,6 +458,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
 class RecurrentNeuralNetwork(NeuralNetwork):
 
     def __init__(self, width, depth, **kwargs):
+        raise NotImplementedError
         super().__init__(**kwargs)
         self.features = 1
         self.width = width
@@ -510,10 +542,17 @@ class TrainingNeuralNetworkDecorator:
             self.model_compiled = True
         return self
 
-    def train(self, batchsize=1, store_states=False, epoch=0):
+    def train(self, batchsize=1, epoch=0):
         self.compiled()
         x, y = self.network.get_samples()
-        savestatecallback = [SaveStateCallback(network=self, epoch=epoch)] if store_states else None
+        callbacks = []
+        if self.get_params().get('store_states'):
+            callbacks.append(SaveStateCallback(network=self, epoch=epoch))
+        if self.get_params().get('early_nan_stopping'):
+            callbacks.append(EarlyStoppingByInfNanLoss())
+
+        # 'or' does not work on empty lists
+        callbacks = callbacks if callbacks else None
         """
         Please Note:
         
@@ -526,7 +565,7 @@ class TrainingNeuralNetworkDecorator:
             given by `epochs`, but merely until the epoch
             of index `epochs` is reached."""
         history = self.network.model.fit(x=x, y=y, initial_epoch=epoch, epochs=epoch+1, verbose=0,
-                                         batch_size=batchsize, callbacks=savestatecallback)
+                                         batch_size=batchsize, callbacks=callbacks)
         return history.history['loss'][-1]
 
     def learn_from(self, other_network, batchsize=1):
@@ -558,11 +597,10 @@ if __name__ == '__main__':
 
     if True:
         # WeightWise Neural Network
-        net_generator = lambda: TrainingNeuralNetworkDecorator(TaskDecorator(
-            WeightwiseNeuralNetwork(width=2, depth=2))).with_keras_params(activation='linear')
-        with TaskExperiment() as exp:
-            exp.run_exp(net_generator, 10, trains_per_application=10)
-            exp.reset_all()
+        with TaskExperiment().with_params(application_steps=10, trains_per_application=1000, exp_iterations=30) as exp:
+            net_generator = lambda: TrainingNeuralNetworkDecorator(TaskDecorator(
+                WeightwiseNeuralNetwork(width=4, depth=3))).with_keras_params(activation='linear')
+            exp.run_exp(net_generator, reset_model=True)
 
     if False:
         # Aggregating Neural Network
@@ -585,8 +623,7 @@ if __name__ == '__main__':
         # ok so this works quite realiably
         run_count = 1000
         net_generator = lambda: TrainingNeuralNetworkDecorator(WeightwiseNeuralNetwork(
-            width=2, depth=2).with_params(epsilon=0.0001, steplimit=2, trains_per_application=10
-                                          )).with_keras_params(optimizer='sgd')
+            width=2, depth=2).with_params(epsilon=0.0001)).with_keras_params(optimizer='sgd')
         with MixedFixpointExperiment() as exp:
             for run_id in tqdm(range(run_count+1)):
                 exp.run_exp(net_generator, 1)
@@ -600,7 +637,7 @@ if __name__ == '__main__':
             net = TrainingNeuralNetworkDecorator(
                 AggregatingNeuralNetwork(4, width=2, depth=2).with_params(epsilon=0.1e-6))
             for run_id in tqdm(range(run_count+1)):
-                loss = net.compiled().train()
+                current_loss = net.compiled().train()
                 if run_id % 100 == 0:
                     net.print_weights()
                     old_aggs, _ = net.get_aggregated_weights()
@@ -609,7 +646,7 @@ if __name__ == '__main__':
                     print("new weights agg: " + str(new_aggs))
                     print("Fixpoint? " + str(net.is_fixpoint()))
                     print("Fixpoint after Agg? " + str(fp))
-                    print("Loss " + str(loss))
+                    print("Loss " + str(current_loss))
                     print()
 
     if False:
@@ -620,10 +657,10 @@ if __name__ == '__main__':
             net = TrainingNeuralNetworkDecorator(RecurrentNeuralNetwork(width=2, depth=2)
                                                  ).with_keras_params(optimizer='sgd', activation='linear')
             for run_id in tqdm(range(run_count+1)):
-                loss = net.compiled().train()
+                current_loss = net.compiled().train()
                 if run_id % 500 == 0:
                     net.print_weights()
                     # print(net.apply_to_network(net))
                     print("Fixpoint? " + str(net.is_fixpoint()))
-                    print("Loss " + str(loss))
+                    print("Loss " + str(current_loss))
                     print()

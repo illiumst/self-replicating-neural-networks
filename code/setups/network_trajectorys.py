@@ -104,7 +104,7 @@ if __name__ == '__main__':
             for run_id in range(10):
                 net = TrainingNeuralNetworkDecorator(FFTNeuralNetwork(2, width=2, depth=2))\
                     .with_params(epsilon=0.0001, activation='sigmoid')
-                exp.run_net(net, 500, 10)
+                exp.run_net(net)
 
                 net.print_weights()
 
