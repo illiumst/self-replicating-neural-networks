@@ -1,16 +1,17 @@
 # Librarys
 import numpy as np
 from abc import abstractmethod, ABC
-from typing import List, Union, Tuple
+from typing import List, Tuple
 from types import FunctionType
 import warnings
+
+import os
 
 # Functions and Operators
 from operator import mul
 from functools import reduce
 from itertools import accumulate
-from statistics import mean
-from random import random as prng
+from copy import deepcopy
 
 # Deep learning Framework
 from tensorflow.python.keras.models import Sequential
@@ -18,8 +19,8 @@ from tensorflow.python.keras.callbacks import Callback
 from tensorflow.python.keras.layers import SimpleRNN, Dense
 
 # Experiment Class
-from experiment import *
-from task import *
+from task import TaskAdditionOfN
+from experiment import TaskExperiment
 
 # Supress warnings and info messages
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -131,8 +132,11 @@ class NeuralNetwork(ABC):
     def get_amount_of_weights(self):
         return self.get_weight_amount(self.get_weights())
 
+    def get_model(self):
+        return self.model
+
     def get_weights(self) -> List[np.ndarray]:
-        return self.model.get_weights()
+        return self.get_model().get_weights()
 
     def get_weights_flat(self) -> np.ndarray:
         return self.weights_to_flat_array(self.get_weights())
@@ -163,7 +167,7 @@ class NeuralNetwork(ABC):
         assert degree >= 1, "degree must be >= 1"
         epsilon = epsilon or self.get_params().get('epsilon')
 
-        new_weights = copy.deepcopy(self.get_weights())
+        new_weights = deepcopy(self.get_weights())
 
         for _ in range(degree):
             new_weights = self.apply_to_weights(new_weights)
@@ -277,7 +281,7 @@ class ParticleDecorator:
         return self
 
 
-class TaskDecorator(ParticleTaskAdditionOf2):
+class TaskDecorator(TaskAdditionOfN):
 
     def __init__(self, network, **kwargs):
         super(TaskDecorator, self).__init__(**kwargs)
@@ -299,6 +303,7 @@ class TaskDecorator(ParticleTaskAdditionOf2):
 
         else:
             self_x, self_y = self.network.get_samples()
+            # Super class = Task
             task_x, task_y = super(TaskDecorator, self).get_samples()
 
             amount_of_weights = self.network.get_amount_of_weights()
@@ -439,7 +444,7 @@ class AggregatingNeuralNetwork(NeuralNetwork):
         epsilon = epsilon or self.get_params().get('epsilon')
 
         old_aggregations, _ = self.get_aggregated_weights()
-        new_weights = copy.deepcopy(self.get_weights())
+        new_weights = deepcopy(self.get_weights())
 
         for _ in range(degree):
             new_weights = self.apply_to_weights(new_weights)
@@ -459,7 +464,7 @@ class RecurrentNeuralNetwork(NeuralNetwork):
 
     def __init__(self, width, depth, **kwargs):
         raise NotImplementedError
-        super().__init__(**kwargs)
+        super(RecurrentNeuralNetwork, self).__init__()
         self.features = 1
         self.width = width
         self.depth = depth
@@ -475,7 +480,7 @@ class RecurrentNeuralNetwork(NeuralNetwork):
 
     def apply_to_weights(self, old_weights):
         # build list from old weights
-        new_weights = copy.deepcopy(old_weights)
+        new_weights = deepcopy(old_weights)
         old_weights_list = []
         for layer_id, layer in enumerate(old_weights):
             for cell_id, cell in enumerate(layer):
@@ -532,7 +537,7 @@ class TrainingNeuralNetworkDecorator:
         return self
 
     def compile_model(self, **kwargs):
-        compile_params = copy.deepcopy(self.compile_params)
+        compile_params = deepcopy(self.compile_params)
         compile_params.update(kwargs)
         return self.network.model.compile(**compile_params)
 
@@ -599,7 +604,8 @@ if __name__ == '__main__':
         # WeightWise Neural Network
         with TaskExperiment().with_params(application_steps=10, trains_per_application=1000, exp_iterations=30) as exp:
             net_generator = lambda: TrainingNeuralNetworkDecorator(TaskDecorator(
-                WeightwiseNeuralNetwork(width=4, depth=3))).with_keras_params(activation='linear')
+                WeightwiseNeuralNetwork(width=2, depth=2))
+            ).with_keras_params(activation='linear')
             exp.run_exp(net_generator, reset_model=True)
 
     if False:

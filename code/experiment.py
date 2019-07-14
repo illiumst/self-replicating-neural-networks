@@ -2,7 +2,7 @@ import os
 import time
 import dill
 from tqdm import tqdm
-import copy
+from copy import copy
 
 from tensorflow.python.keras import backend as K
 
@@ -33,11 +33,11 @@ class Experiment(ABC):
         self.params = dict(exp_iterations=100, application_steps=100, prints=True, trains_per_application=100)
         self.with_params(**kwargs)
 
-    def __copy__(self):
-
-        self_copy = self.__class__(name=self.experiment_name, **self.params)
-        self_copy.__dict__ = {attr: self.__dict__[attr] for attr in self.__dict__ if
-                              attr not in ['particles', 'historical_particles']}
+    def __copy__(self, *args, **kwargs):
+        params = self.params
+        params.update(name=self.experiment_name)
+        params.update(**kwargs)
+        self_copy = self.__class__(*args, **params)
         return self_copy
 
     def __enter__(self):
@@ -68,9 +68,14 @@ class Experiment(ABC):
                 print(str(log_message), file=log_file)
 
     def without_particles(self):
-        self_copy = copy.copy(self)
-        # self_copy.particles = [particle.states for particle in self.particles]
-        self_copy.historical_particles = {key: val.states for key, val in self.historical_particles.items()}
+        self_copy = copy(self)
+        # Check if attribute exists
+        if hasattr(self, 'historical_particles'):
+            # Check if it is empty.
+            if self.historical_particles:
+                # Do the Update
+                # self_copy.particles = [particle.states for particle in self.particles]
+                self_copy.historical_particles = {key: val.states for key, val in self.historical_particles.items()}
         return self_copy
 
     def save(self, **kwargs):
@@ -196,7 +201,7 @@ class TaskExperiment(MixedFixpointExperiment):
         kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
         super(TaskExperiment, self).__init__(**kwargs)
 
-    def run_exp(self, network_generator, logging=True, reset_model=False, **kwargs):
+    def run_exp(self, network_generator, reset_model=False, logging=True, **kwargs):
         kwargs.update(reset_model=False, logging=logging)
         super(FixpointExperiment, self).run_exp(network_generator, **kwargs)
         if reset_model:
@@ -247,10 +252,13 @@ class TaskingSoupExperiment(Experiment):
 
     def __init__(self, soup_generator, **kwargs):
         kwargs['name'] = self.__class__.__name__ if 'name' not in kwargs else kwargs['name']
-        self.soup_generator = soup_generator
         super(TaskingSoupExperiment, self).__init__(**kwargs)
+        self.soup_generator = soup_generator
 
-    def run_exp(self, network_generator, **kwargs):
+    def __copy__(self):
+        super(TaskingSoupExperiment, self).__copy__(self.soup_generator)
+
+    def run_exp(self, **kwargs):
         for i in range(self.params.get('exp_iterations')):
             soup = self.soup_generator()
             soup.seed()
@@ -263,3 +271,7 @@ class TaskingSoupExperiment(Experiment):
     def run_net(self, net, **kwargs):
         raise NotImplementedError()
         pass
+
+
+if __name__ == '__main__':
+    pass
