@@ -1,0 +1,30 @@
+variation 10e-0
+avg time to vergence 3.63
+avg time as fixpoint 0
+variation 10e-1
+avg time to vergence 5.02
+avg time as fixpoint 0
+variation 10e-2
+avg time to vergence 6.46
+avg time as fixpoint 0
+variation 10e-3
+avg time to vergence 8.04
+avg time as fixpoint 0
+variation 10e-4
+avg time to vergence 9.61
+avg time as fixpoint 0.04
+variation 10e-5
+avg time to vergence 11.23
+avg time as fixpoint 1.38
+variation 10e-6
+avg time to vergence 12.99
+avg time as fixpoint 3.23
+variation 10e-7
+avg time to vergence 14.58
+avg time as fixpoint 4.84
+variation 10e-8
+avg time to vergence 21.95
+avg time as fixpoint 11.91
+variation 10e-9
+avg time to vergence 26.45
+avg time as fixpoint 16.47

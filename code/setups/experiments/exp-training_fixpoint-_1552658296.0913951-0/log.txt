@@ -1,0 +1,12 @@
+WeightwiseNeuralNetwork activiation='linear' use_bias=False
+{'divergent': 0, 'fix_zero': 0, 'fix_other': 50, 'fix_sec': 0, 'other': 0}
+
+
+AggregatingNeuralNetwork activiation='linear' use_bias=False
+{'divergent': 0, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 50}
+
+
+RecurrentNeuralNetwork activiation='linear' use_bias=False
+{'divergent': 38, 'fix_zero': 0, 'fix_other': 0, 'fix_sec': 0, 'other': 12}
+
+

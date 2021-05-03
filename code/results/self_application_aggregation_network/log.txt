@@ -1,0 +1,1 @@
+{'divergent': 0, 'fix_zero': 10, 'fix_other': 0, 'fix_sec': 0, 'other': 0}
