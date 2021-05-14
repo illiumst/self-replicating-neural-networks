@@ -34,7 +34,7 @@ def plot_loss(loss_array, directory_name, batch_size=1):
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
 
-    filepath = f"A:/Bachelorarbeit_git/thesis_code/{directory_name}"
+    filepath = f"./{directory_name}"
     filename = f"{filepath}/_nets_loss_function.png"
     plt.savefig(f"{filename}")
 
@@ -66,7 +66,7 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory_
     plt.bar(range(len(fixpoint_counter)), list(fixpoint_counter.values()), align='center')
     plt.xticks(range(len(fixpoint_counter)), list(fixpoint_counter.keys()))
 
-    filepath = f"A:/Bachelorarbeit_git/thesis_code/{directory_name}"
+    filepath = f"./{directory_name}"
     filename = f"{filepath}/{str(population_size)}_nets_fixpoints_barchart.png"
     plt.savefig(f"{filename}")
 
@@ -89,7 +89,7 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
     for i in loop_matrices_weights_history:
         loop_matrices_weights_history.set_description("Plotting weights 3D PCA %s" % i)
 
-        weight_matrix = matrices_weights_history[i]
+        weight_matrix, start_time = matrices_weights_history[i]
         weight_matrix = np.array(weight_matrix)
         n, x, y = weight_matrix.shape
         weight_matrix = weight_matrix.reshape(n, x * y)
@@ -101,7 +101,7 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
         for j in range(len(weight_matrix_pca)):
             xdata.append(weight_matrix_pca[j][0])
             ydata.append(weight_matrix_pca[j][1])
-        zdata = np.arange(1, len(ydata)*batch_size+1, batch_size).tolist()
+        zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size).tolist()
 
         ax.plot3D(xdata, ydata, zdata)
         ax.scatter(np.array(xdata), np.array(ydata), np.array(zdata), s=7)
@@ -120,7 +120,7 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
     ax.set_ylabel("PCA Y")
     ax.set_zlabel(f"Epochs")
 
-    filepath = f"A:/Bachelorarbeit_git/thesis_code/{folder_name}"
+    filepath = f"./{folder_name}"
     filename = f"{filepath}/{exp_name}{is_trained}.png"
     if os.path.isfile(filename):
         letters = string.ascii_lowercase
@@ -129,8 +129,8 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
     else:
         plt.savefig(f"{filename}")
 
-    # plt.show()
-    plt.clf()
+    plt.show()
+    #plt.clf()
 
 
 def plot_3d_self_train(nets_array: List, exp_name: String, directory_name: String, batch_size: int):
@@ -142,7 +142,7 @@ def plot_3d_self_train(nets_array: List, exp_name: String, directory_name: Strin
     for i in loop_nets_array:
         loop_nets_array.set_description("Creating ST weights history %s" % i)
 
-        matrices_weights_history.append(nets_array[i].s_train_weights_history)
+        matrices_weights_history.append( (nets_array[i].s_train_weights_history, nets_array[i].start_time) )
 
     z_axis_legend = "epochs"
 
@@ -158,7 +158,7 @@ def plot_3d_self_application(nets_array: List, exp_name: String, directory_name:
     for i in loop_nets_array:
         loop_nets_array.set_description("Creating SA weights history %s" % i)
 
-        matrices_weights_history.append(nets_array[i].s_application_weights_history)
+        matrices_weights_history.append( (nets_array[i].s_application_weights_history, nets_array[i].start_time) )
 
         if nets_array[i].trained:
             is_trained = "_trained"
@@ -202,7 +202,7 @@ def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_
 
     plt.plot(ST_steps_per_SA, fixpoint_counters_history, color="green", marker="o")
 
-    filepath = f"A:/Bachelorarbeit_git/thesis_code/{directory_name}"
+    filepath = f"./{directory_name}"
     filename = f"{filepath}/{str(population_size)}_nets_fixpoints_linechart.png"
     plt.savefig(f"{filename}")
 
@@ -223,7 +223,7 @@ def box_plot(data, directory_name, population_size):
     axs[1].boxplot(data)
     axs[1].set_title('Box plot')
 
-    filepath = f"A:/Bachelorarbeit_git/thesis_code/{directory_name}"
+    filepath = f"./{directory_name}"
     filename = f"{filepath}/{str(population_size)}_nets_fixpoints_barchart.png"
     plt.savefig(f"{filename}")
 
@@ -232,7 +232,7 @@ def box_plot(data, directory_name, population_size):
 
 
 def write_file(text, directory_name):
-    filepath = f"A:/Bachelorarbeit_git/thesis_code/{directory_name}"
+    filepath = f"./{directory_name}"
     f = open(f"{filepath}/experiment.txt", "w+")
     f.write(text)
     f.close()

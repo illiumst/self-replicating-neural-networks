@@ -1,4 +1,4 @@
-from __future__ import annotations
+#from __future__ import annotations
 import copy
 import torch
 import torch.nn as nn
@@ -33,7 +33,7 @@ class Net(nn.Module):
         return False
 
     @staticmethod
-    def apply_weights(network: Net, new_weights: Tensor) -> Net:
+    def apply_weights(network, new_weights: Tensor):
         """ Changing the weights of a network to new given values. """
 
         i = 0
@@ -46,9 +46,12 @@ class Net(nn.Module):
 
         return network
 
-    def __init__(self, i_size: int, h_size: int, o_size: int, name=None) -> None:
-        super().__init__()
 
+    
+
+    def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
+        super().__init__()
+        self.start_time = start_time
         self.name = name
         self.input_size = i_size
         self.hidden_size = h_size
@@ -61,6 +64,7 @@ class Net(nn.Module):
         self.s_application_weights_history = []
         self.loss_history = []
         self.trained = False
+        self.number_trained = 0
 
         self.is_fixpoint = ""
 
@@ -75,15 +79,13 @@ class Net(nn.Module):
 
         return x
 
-    def normalize(self, value):
+    def normalize(self, value, norm):
         """ Normalizing the values >= 1 and adding pow(10, -8) to the values equal to 0 """
 
-        if value >= 1:
-            return value/len(self.state_dict())
-        elif value == 0:
-            return pow(10, -8)
+        if norm > 1:
+            return float(value) / float(norm)
         else:
-            return value
+            return float(value)
 
     def input_weight_matrix(self) -> Tensor:
         """ Calculating the input tensor formed from the weights of the net """
@@ -92,11 +94,13 @@ class Net(nn.Module):
         weight_matrix = np.arange(self.no_weights * 4).reshape(self.no_weights, 4).astype("f")
 
         i = 0
-
+        max_layer_id = len(self.state_dict()) - 1
         for layer_id, layer_name in enumerate(self.state_dict()):
+            max_cell_id = len(self.state_dict()[layer_name]) - 1
             for line_id, line_values in enumerate(self.state_dict()[layer_name]):
+                max_weight_id = len(line_values) - 1
                 for weight_id, weight_value in enumerate(self.state_dict()[layer_name][line_id]):
-                    weight_matrix[i] = weight_value.item(), self.normalize(layer_id), self.normalize(weight_id), self.normalize(line_id)
+                    weight_matrix[i] = weight_value.item(), self.normalize(layer_id, max_layer_id), self.normalize(line_id, max_cell_id), self.normalize(weight_id, max_weight_id)
                     i += 1
 
         return torch.from_numpy(weight_matrix)
@@ -108,9 +112,10 @@ class Net(nn.Module):
         self.trained = True
 
         for training_step in range(training_steps):
+            self.number_trained +=1
+            optimizer.zero_grad()
             output = self(input_data)
             loss = F.mse_loss(output, target_data)
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -118,22 +123,22 @@ class Net(nn.Module):
             # If it is a soup/mixed env. save weights only at the end of all training steps (aka a soup/mixed epoch)
             if "soup" not in self.name and "mixed" not in self.name:
                 # If self-training steps are lower than 10, then append weight history after each ST step.
-                if training_steps < 10:
-                    self.s_train_weights_history.append(output.T.detach().numpy())
-                    self.loss_history.append(round(loss.detach().numpy().item(), 5))
+                if self.number_trained < 10:
+                    self.s_train_weights_history.append(target_data.T.detach().numpy())
+                    self.loss_history.append(loss.detach().numpy().item())
                 else:
-                    if training_step % log_step_size == 0:
-                        self.s_train_weights_history.append(output.T.detach().numpy())
-                        self.loss_history.append(round(loss.detach().numpy().item(), 5))
+                    if self.number_trained % log_step_size == 0:
+                        self.s_train_weights_history.append(target_data.T.detach().numpy())
+                        self.loss_history.append(loss.detach().numpy().item())
 
         # Saving weights only at the end of a soup/mixed exp. epoch.
         if "soup" in self.name or "mixed" in self.name:
-            self.s_train_weights_history.append(output.T.detach().numpy())
-            self.loss_history.append(round(loss.detach().numpy().item(), 5))
+            self.s_train_weights_history.append(target_data.T.detach().numpy())
+            self.loss_history.append(loss.detach().numpy().item())
 
         return output.detach().numpy(), loss, self.loss_history
 
-    def self_application(self, weights_matrix: Tensor, SA_steps: int, log_step_size: int) -> Net:
+    def self_application(self, weights_matrix: Tensor, SA_steps: int, log_step_size: int) :
         """ Inputting the weights of a network to itself for a number of steps, without backpropagation. """
 
         data = copy.deepcopy(weights_matrix)
@@ -162,7 +167,7 @@ class Net(nn.Module):
 
         return new_net
 
-    def attack(self, other_net: Net) -> Net:
+    def attack(self, other_net):
         other_net_weights = other_net.input_weight_matrix()
         SA_steps = 1
         log_step_size = 1

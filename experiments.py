@@ -53,10 +53,12 @@ class SelfTrainExperiment:
             net_name = f"ST_net_{str(i)}"
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
 
-            input_data = net.input_weight_matrix()
-            target_data = net.create_target_weights(input_data)
-            net.self_train(self.epochs, self.log_step_size, self.net_learning_rate, input_data, target_data)
+            for _ in range(self.epochs):
+              input_data = net.input_weight_matrix()
+              target_data = net.create_target_weights(input_data)
+              net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
 
+            print(f"\nLast weight matrix (epoch: {self.epochs}):\n{net.input_weight_matrix()}\nLossHistory: {net.loss_history[-10:]}")
             self.nets.append(net)
 
     def weights_evolution_3d_experiment(self):
@@ -122,17 +124,18 @@ class SelfApplicationExperiment:
 
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name
                       )
-            input_data = net.input_weight_matrix()
-            target_data = net.create_target_weights(input_data)
-
-            if self.train_nets == "before_SA":
-                net.self_train(self.ST_steps, self.log_step_size, self.net_learning_rate, input_data, target_data)
-                net.self_application(input_data, self.SA_steps, self.log_step_size)
-            elif self.train_nets == "after_SA":
-                net.self_application(input_data, self.SA_steps, self.log_step_size)
-                net.self_train(self.ST_steps, self.log_step_size, self.net_learning_rate, input_data, target_data)
-            else:
-                net.self_application(input_data, self.SA_steps, self.log_step_size)
+            for _ in range(self.SA_steps):
+                input_data = net.input_weight_matrix()
+                target_data = net.create_target_weights(input_data)
+                
+                if self.train_nets == "before_SA":
+                    net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
+                    net.self_application(input_data, self.SA_steps, self.log_step_size)
+                elif self.train_nets == "after_SA":
+                    net.self_application(input_data, self.SA_steps, self.log_step_size)
+                    net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
+                else:
+                    net.self_application(input_data, self.SA_steps, self.log_step_size)
 
             self.nets.append(net)
 
@@ -217,10 +220,12 @@ class SoupExperiment:
             #  Self-training each network in the population
             for j in range(self.population_size):
                 net = self.population[j]
-                input_data = net.input_weight_matrix()
-                target_data = net.create_target_weights(input_data)
+                
+                for _ in range(self.ST_steps):
+                    input_data = net.input_weight_matrix()
+                    target_data = net.create_target_weights(input_data)
+                    net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
 
-                net.self_train(self.ST_steps, self.log_step_size, self.net_learning_rate, input_data, target_data)
 
             # Testing for fixpoints after each batch of ST steps to see relevant data
             if i % self.ST_steps == 0:
@@ -323,18 +328,23 @@ class MixedSettingExperiment:
             for i in loop_population_size:
                 net = self.nets[i]
 
-                input_data = net.input_weight_matrix()
-                target_data = net.create_target_weights(input_data)
-
                 if self.train_nets == "before_SA":
-                    net.self_train(self.ST_steps_between_SA, self.log_step_size, self.net_learning_rate, input_data,
-                                   target_data)
+                    for _ in range(self.ST_steps_between_SA):
+                        input_data = net.input_weight_matrix()
+                        target_data = net.create_target_weights(input_data)
+                        net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
+                    input_data = net.input_weight_matrix()
                     net.self_application(input_data, self.SA_steps, self.log_step_size)
+                      
                 elif self.train_nets == "after_SA":
+                    input_data = net.input_weight_matrix()
                     net.self_application(input_data, self.SA_steps, self.log_step_size)
-                    net.self_train(self.ST_steps_between_SA, self.log_step_size, self.net_learning_rate, input_data,
-                                   target_data)
-
+                    for _ in range(self.ST_steps_between_SA):
+                        input_data = net.input_weight_matrix()
+                        target_data = net.create_target_weights(input_data)
+                        net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
+                
+                print(f"\nLast weight matrix (epoch: {j}):\n{net.input_weight_matrix()}\nLossHistory: {net.loss_history[-10:]}") 
             test_for_fixpoints(self.fixpoint_counters, self.nets)
             # Rounding the result not to run into other problems later regarding the exact representation of floating number
             fixpoints_percentage = round((self.fixpoint_counters["fix_zero"] + self.fixpoint_counters[
@@ -411,8 +421,10 @@ class RobustnessExperiment:
         self.nets = []
         # Create population:
         self.populate_environment()
+        print("Nets:\n", self.nets)
 
         self.count_fixpoints()
+        [print(net.is_fixpoint) for net in self.nets]
         self.test_robustness()
 
     def populate_environment(self):
@@ -423,14 +435,15 @@ class RobustnessExperiment:
             net_name = f"net_{str(i)}"
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
 
-            input_data = net.input_weight_matrix()
-            target_data = net.create_target_weights(input_data)
-            net.self_train(self.ST_steps, self.log_step_size, self.net_learning_rate, input_data, target_data)
+            for _ in range(self.ST_steps):
+                input_data = net.input_weight_matrix()
+                target_data = net.create_target_weights(input_data)
+                net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
 
             self.nets.append(net)
 
     def test_robustness(self):
-        test_for_fixpoints(self.fixpoint_counters, self.nets, self.id_functions)
+        #test_for_fixpoints(self.fixpoint_counters, self.nets, self.id_functions)
 
         zero_epsilon = pow(10, -5)
         data = [[0 for _ in range(10)] for _ in range(len(self.id_functions))]
@@ -460,10 +473,15 @@ class RobustnessExperiment:
                 while still_id_func and data[i][j] <= 1000:
                     data[i][j] += 1
 
-                    new_weights = original_net_clone.create_target_weights(changed_weights)
-                    original_net_clone = original_net_clone.apply_weights(original_net_clone, new_weights)
+                    input_data = original_net_clone.input_weight_matrix()
+                    original_net_clone = original_net_clone.self_application(input_data, 1, self.log_step_size)
+                    
+                    #new_weights = original_net_clone.create_target_weights(changed_weights)
+                    #original_net_clone = original_net_clone.apply_weights(original_net_clone, new_weights)
 
                     still_id_func = is_identity_function(original_net_clone, input_data, target_data, zero_epsilon)
+
+        print(f"Data {data}")
 
         if data.count(0) == 10:
             print(f"There is no network resisting the robustness test.")
@@ -476,7 +494,7 @@ class RobustnessExperiment:
     def count_fixpoints(self):
         exp_details = f"ST steps: {self.ST_steps}"
 
-        test_for_fixpoints(self.fixpoint_counters, self.nets)
+        self.id_functions = test_for_fixpoints(self.fixpoint_counters, self.nets)
         bar_chart_fixpoints(self.fixpoint_counters, self.population_size, self.directory_name, self.net_learning_rate,
                             exp_details)
 

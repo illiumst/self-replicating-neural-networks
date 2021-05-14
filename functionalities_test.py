@@ -98,6 +98,7 @@ def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=[]):
             fixpoint_counter["other_func"] += 1
             nets[i].is_fixpoint = "other_func"
 
+    return id_functions
 
 def changing_rate(x_new, x_old):
     return x_new - x_old

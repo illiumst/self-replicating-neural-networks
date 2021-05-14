@@ -40,16 +40,16 @@ if __name__ == '__main__':
     NET_OUT_SIZE = 1
 
     """ ------------------------------------- Self-training (ST) experiment ------------------------------------- """
-    run_ST_experiment_bool = True
+    run_ST_experiment_bool = False
 
     # Define number of runs & name:
-    ST_runs = 3
+    ST_runs = 1
     ST_runs_name = "test-27"
-    ST_epochs = 500
-    ST_log_step_size = 5
+    ST_epochs = 1000
+    ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    ST_population_size = 10
+    ST_population_size = 1
     ST_net_hidden_size = 2
 
     ST_net_learning_rate = 0.04
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     """ ----------------------------------- Self-application (SA) experiment ----------------------------------- """
 
-    run_SA_experiment_bool = True
+    run_SA_experiment_bool = False
 
     # Define number of runs, name, etc.:
     SA_runs_name = "test-17"
@@ -82,7 +82,7 @@ if __name__ == '__main__':
 
     """ -------------------------------------------- Soup experiment -------------------------------------------- """
 
-    run_soup_experiment_bool = True
+    run_soup_experiment_bool = False
 
     # Define number of runs, name, etc.:
     soup_runs = 1
@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     """ ------------------------------------------- Mixed experiment -------------------------------------------- """
 
-    run_mixed_experiment_bool = True
+    run_mixed_experiment_bool = False
 
     # Define number of runs, name, etc.:
     mixed_runs_name = "test-17"
