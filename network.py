@@ -1,5 +1,7 @@
 #from __future__ import annotations
 import copy
+from typing import Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -32,22 +34,16 @@ class Net(nn.Module):
                         return True
         return False
 
-    @staticmethod
-    def apply_weights(network, new_weights: Tensor):
+    def apply_weights(self, new_weights: Tensor):
         """ Changing the weights of a network to new given values. """
-
         i = 0
-
-        for layer_id, layer_name in enumerate(network.state_dict()):
-            for line_id, line_values in enumerate(network.state_dict()[layer_name]):
-                for weight_id, weight_value in enumerate(network.state_dict()[layer_name][line_id]):
-                    network.state_dict()[layer_name][line_id][weight_id] = new_weights[i]
+        for layer_id, layer_name in enumerate(self.state_dict()):
+            for line_id, line_values in enumerate(self.state_dict()[layer_name]):
+                for weight_id, weight_value in enumerate(self.state_dict()[layer_name][line_id]):
+                    self.state_dict()[layer_name][line_id][weight_id] = new_weights[i]
                     i += 1
 
-        return network
-
-
-    
+        return self
 
     def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
         super().__init__()
@@ -105,15 +101,17 @@ class Net(nn.Module):
 
         return torch.from_numpy(weight_matrix)
 
-    def self_train(self, training_steps: int, log_step_size: int, learning_rate: float, input_data: Tensor, target_data: Tensor) -> (np.ndarray, Tensor, list):
+    def self_train(self, training_steps: int, log_step_size: int, learning_rate: float) -> (np.ndarray, Tensor, list):
         """ Training a network to predict its own weights in order to self-replicate. """
 
         optimizer = optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9)
         self.trained = True
 
         for training_step in range(training_steps):
-            self.number_trained +=1
+            self.number_trained += 1
             optimizer.zero_grad()
+            input_data = self.input_weight_matrix()
+            target_data = self.create_target_weights(input_data)
             output = self(input_data)
             loss = F.mse_loss(output, target_data)
             loss.backward()
@@ -122,31 +120,29 @@ class Net(nn.Module):
             # Saving the history of the weights after a certain amount of steps (aka log_step_size) for research.
             # If it is a soup/mixed env. save weights only at the end of all training steps (aka a soup/mixed epoch)
             if "soup" not in self.name and "mixed" not in self.name:
+                weights = self.create_target_weights(self.input_weight_matrix())
                 # If self-training steps are lower than 10, then append weight history after each ST step.
                 if self.number_trained < 10:
-                    self.s_train_weights_history.append(target_data.T.detach().numpy())
+                    self.s_train_weights_history.append(weights.T.detach().numpy())
                     self.loss_history.append(loss.detach().numpy().item())
                 else:
                     if self.number_trained % log_step_size == 0:
-                        self.s_train_weights_history.append(target_data.T.detach().numpy())
+                        self.s_train_weights_history.append(weights.T.detach().numpy())
                         self.loss_history.append(loss.detach().numpy().item())
 
+        weights = self.create_target_weights(self.input_weight_matrix())
         # Saving weights only at the end of a soup/mixed exp. epoch.
         if "soup" in self.name or "mixed" in self.name:
-            self.s_train_weights_history.append(target_data.T.detach().numpy())
+            self.s_train_weights_history.append(weights.T.detach().numpy())
             self.loss_history.append(loss.detach().numpy().item())
 
-        return output.detach().numpy(), loss, self.loss_history
+        return weights.detach().numpy(), loss, self.loss_history
 
-    def self_application(self, weights_matrix: Tensor, SA_steps: int, log_step_size: int) :
+    def self_application(self,  SA_steps: int, log_step_size: Union[int, None] = None):
         """ Inputting the weights of a network to itself for a number of steps, without backpropagation. """
 
-        data = copy.deepcopy(weights_matrix)
-        new_net = copy.deepcopy(self)
-        # output = new_net(data)
-
         for i in range(SA_steps):
-            output = new_net(data)
+            output = self(self.input_weight_matrix())
 
             # Saving the weights history after a certain amount of steps (aka log_step_size) for research purposes.
             # If self-application steps are lower than 10, then append weight history after each SA step.
@@ -159,17 +155,14 @@ class Net(nn.Module):
             """ See after how many steps of SA is the output not changing anymore: """
             # print(f"Self-app. step {i+1}: {Experiment.changing_rate(output2, output)}")
 
-            for j in range(len(data)):
-                """ Constructing the weight matrix to have it as the next input. """
-                data[j][0] = output[j]
+            self = self.apply_weights(output)
 
-            new_net = self.apply_weights(new_net, output)
-
-        return new_net
+        return self
 
     def attack(self, other_net):
         other_net_weights = other_net.input_weight_matrix()
-        SA_steps = 1
-        log_step_size = 1
+        my_evaluation = self(other_net_weights)
 
-        return self.self_application(other_net_weights, SA_steps, log_step_size)
+        SA_steps = 1
+
+        return other_net.apply_weights(my_evaluation)

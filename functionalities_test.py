@@ -27,7 +27,10 @@ def is_divergent(network: Net) -> bool:
     return False
 
 
-def is_identity_function(network: Net, input_data: Tensor, target_data: Tensor, epsilon=pow(10, -5)) -> bool:
+def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
+
+    input_data = network.input_weight_matrix()
+    target_data = network.create_target_weights(input_data)
     predicted_values = network(input_data)
 
     return np.allclose(target_data.detach().numpy(), predicted_values.detach().numpy(), 0, epsilon)
@@ -48,7 +51,7 @@ def is_secondary_fixpoint(network: Net, input_data: Tensor, epsilon: float) -> b
 
     # Getting the second output by initializing a new net with the weights of the original net.
     net_copy = copy.deepcopy(network)
-    net_copy.apply_weights(net_copy, first_output)
+    net_copy.apply_weights(first_output)
     input_data_2 = net_copy.input_weight_matrix()
 
     # Calculating second output
@@ -69,7 +72,8 @@ def is_weak_fixpoint(network: Net, input_data: Tensor, epsilon: float) -> bool:
     return result
 
 
-def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=[]):
+def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
+    id_functions = id_functions or None
     zero_epsilon = pow(10, -5)
     epsilon = pow(10, -3)
 
@@ -81,7 +85,7 @@ def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=[]):
         if is_divergent(nets[i]):
             fixpoint_counter["divergent"] += 1
             nets[i].is_fixpoint = "divergent"
-        elif is_identity_function(nets[i], input_data, target_data, zero_epsilon):
+        elif is_identity_function(nets[i], zero_epsilon):
             fixpoint_counter["identity_func"] += 1
             nets[i].is_fixpoint = "identity_func"
             id_functions.append(nets[i])
