@@ -1,7 +1,7 @@
+from pathlib import Path
 from tokenize import String
 from typing import List, Dict
 
-import numpy
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -120,14 +120,17 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
     ax.set_ylabel("PCA Y")
     ax.set_zlabel(f"Epochs")
 
-    filepath = f"./{folder_name}"
-    filename = f"{filepath}/{exp_name}{is_trained}.png"
-    if os.path.isfile(filename):
+    # FIXME: Replace this kind of operation with pathlib.Path() object interactions
+    folder = Path(folder_name)
+    folder.mkdir(parents=True, exist_ok=True)
+    filename = f"{exp_name}{is_trained}.png"
+    filepath = folder / filename
+    if filepath.exists():
         letters = string.ascii_lowercase
         random_letters = ''.join(random.choice(letters) for _ in range(5))
-        plt.savefig(f"{filename}_{random_letters}")
+        plt.savefig(f"{filepath.stem}_{random_letters}.png")
     else:
-        plt.savefig(f"{filename}")
+        plt.savefig(str(filepath))
 
     plt.show()
     #plt.clf()

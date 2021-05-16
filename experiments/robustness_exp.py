@@ -20,7 +20,6 @@ def add_noise(input_data, epsilon = pow(10, -5)):
     return output
 
 
-
 class RobustnessExperiment:
     def __init__(self, population_size, log_step_size, net_input_size, net_hidden_size, net_out_size, net_learning_rate,
                  ST_steps, directory_name) -> None:
