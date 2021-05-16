@@ -40,11 +40,11 @@ if __name__ == '__main__':
     # Constants:
     NET_INPUT_SIZE = 4
     NET_OUT_SIZE = 1
-    run_ST_experiment_bool = True
+    run_ST_experiment_bool = False
     run_SA_experiment_bool = False
     run_soup_experiment_bool = False
     run_mixed_experiment_bool = False
-    run_robustness_bool = False
+    run_robustness_bool = True
 
     """ ------------------------------------- Self-training (ST) experiment ------------------------------------- """
 

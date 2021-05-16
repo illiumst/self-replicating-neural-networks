@@ -54,7 +54,7 @@ def is_secondary_fixpoint(network: Net, epsilon: float = pow(10, -5)) -> bool:
 
 
 def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
-    id_functions = id_functions or None
+    id_functions = id_functions or list()
 
     for i in range(len(nets)):
         net = nets[i]

@@ -1,6 +1,8 @@
 import random
 import os.path
 import pickle
+from pathlib import Path
+from typing import Union
 
 from tqdm import tqdm
 
@@ -12,7 +14,7 @@ from visualization import plot_loss, bar_chart_fixpoints, plot_3d_soup, line_cha
 
 class SoupExperiment:
     def __init__(self, population_size, net_i_size, net_h_size, net_o_size, learning_rate, attack_chance,
-                 train_nets, ST_steps, epochs, log_step_size, directory_name):
+                 train_nets, ST_steps, epochs, log_step_size, directory: Union[str, Path]):
         super().__init__()
         self.population_size = population_size
 
@@ -40,8 +42,8 @@ class SoupExperiment:
         # <self.fixpoint_counters_history> is used for keeping track of the amount of fixpoints in %
         self.fixpoint_counters_history = []
 
-        self.directory_name = directory_name
-        os.mkdir(self.directory_name)
+        self.directory = Path(directory)
+        self.directory.mkdir(parents=True, exist_ok=True)
 
         self.population = []
         self.populate_environment()
@@ -69,8 +71,7 @@ class SoupExperiment:
             loop_epochs.set_description("Evolving soup %s" % i)
 
             # A network attacking another network with a given percentage
-            chance = random.randint(1, 100)
-            if chance <= self.attack_chance:
+            if random.randint(1, 100) <= self.attack_chance:
                 random_net1, random_net2 = random.sample(range(self.population_size), 2)
                 random_net1 = self.population[random_net1]
                 random_net2 = self.population[random_net2]
@@ -91,24 +92,25 @@ class SoupExperiment:
                                               self.fixpoint_counters["fix_sec"]) / self.population_size, 1)
                 self.fixpoint_counters_history.append(fixpoints_percentage)
 
-            # Resetting the fixpoint counter. Last iteration not to be reset - it is important for the bar_chart_fixpoints().
+            # Resetting the fixpoint counter. Last iteration not to be reset -
+            #  it is important for the bar_chart_fixpoints().
             if i < self.epochs:
                 self.reset_fixpoint_counters()
 
     def weights_evolution_3d_experiment(self):
         exp_name = f"soup_{self.population_size}_nets_{self.ST_steps}_training_{self.epochs}_epochs"
-        return plot_3d_soup(self.population, exp_name, self.directory_name)
+        return plot_3d_soup(self.population, exp_name, self.directory)
 
     def count_fixpoints(self):
         test_for_fixpoints(self.fixpoint_counters, self.population)
         exp_details = f"Evolution steps: {self.epochs} epochs"
-        bar_chart_fixpoints(self.fixpoint_counters, self.population_size, self.directory_name, self.net_learning_rate,
+        bar_chart_fixpoints(self.fixpoint_counters, self.population_size, self.directory, self.net_learning_rate,
                             exp_details)
 
     def fixpoint_percentage(self):
         runs = self.epochs / self.ST_steps
         SA_steps = None
-        line_chart_fixpoints(self.fixpoint_counters_history, runs, self.ST_steps, SA_steps, self.directory_name,
+        line_chart_fixpoints(self.fixpoint_counters_history, runs, self.ST_steps, SA_steps, self.directory,
                              self.population_size)
 
     def visualize_loss(self):
@@ -116,7 +118,7 @@ class SoupExperiment:
             net_loss_history = self.population[i].loss_history
             self.loss_history.append(net_loss_history)
 
-        plot_loss(self.loss_history, self.directory_name)
+        plot_loss(self.loss_history, self.directory)
 
     def reset_fixpoint_counters(self):
         self.fixpoint_counters = {
@@ -138,6 +140,7 @@ def run_soup_experiment(population_size, attack_chance, net_input_size, net_hidd
 
     # Running the experiments
     for i in range(runs):
+        # FIXME: Make this a pathlib.Path() Operation
         directory_name = f"experiments/soup/{run_name}_run_{i}_{str(population_size)}_nets_{epochs}_epochs_{str(name_hash)}"
 
         soup_experiment = SoupExperiment(
@@ -166,6 +169,7 @@ def run_soup_experiment(population_size, attack_chance, net_input_size, net_hidd
                                      range(len(fixpoints_percentages))]
 
     # Creating a folder for the summary of the current runs
+    # FIXME: Make this a pathlib.Path() Operation
     directory_name = f"experiments/soup/summary_{run_name}_{runs}_runs_{str(population_size)}_nets_{epochs}_epochs_{str(name_hash)}"
     os.mkdir(directory_name)
 

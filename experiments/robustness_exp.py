@@ -11,7 +11,7 @@ from network import Net
 from visualization import bar_chart_fixpoints, box_plot, write_file
 
 
-def add_noise(input_data, epsilon = pow(10, -5)):
+def add_noise(input_data, epsilon=pow(10, -5)):
 
     output = copy.deepcopy(input_data)
     for k in range(len(input_data)):
@@ -63,8 +63,6 @@ class RobustnessExperiment:
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
 
             for _ in range(self.ST_steps):
-                input_data = net.input_weight_matrix()
-                target_data = net.create_target_weights(input_data)
                 net.self_train(1, self.log_step_size, self.net_learning_rate)
 
             self.nets.append(net)
@@ -86,7 +84,7 @@ class RobustnessExperiment:
                 # Extra safety for the value of the weights
                 original_net_clone.load_state_dict(copy.deepcopy(original_net.state_dict()))
 
-                noisy_weights = add_noise(original_net_clone.input_weight_matrix())
+                noisy_weights = add_noise(original_net_clone.input_weight_matrix(), epsilon=pow(10, -j))
                 original_net_clone.apply_weights(noisy_weights)
 
                 # Testing if the new net is still an identity function after applying noise

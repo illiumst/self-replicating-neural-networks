@@ -68,17 +68,13 @@ class MixedSettingExperiment:
 
                 if self.train_nets == "before_SA":
                     for _ in range(self.ST_steps_between_SA):
-                        input_data = net.input_weight_matrix()
-                        target_data = net.create_target_weights(input_data)
-                        net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
+                        net.self_train(1, self.log_step_size, self.net_learning_rate)
                     net.self_application(self.SA_steps, self.log_step_size)
 
                 elif self.train_nets == "after_SA":
                     net.self_application(self.SA_steps, self.log_step_size)
                     for _ in range(self.ST_steps_between_SA):
-                        input_data = net.input_weight_matrix()
-                        target_data = net.create_target_weights(input_data)
-                        net.self_train(1, self.log_step_size, self.net_learning_rate, input_data, target_data)
+                        net.self_train(1, self.log_step_size, self.net_learning_rate)
 
                 print(
                     f"\nLast weight matrix (epoch: {j}):\n{net.input_weight_matrix()}\nLossHistory: {net.loss_history[-10:]}")
