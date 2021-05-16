@@ -1,6 +1,5 @@
 from pathlib import Path
-from tokenize import String
-from typing import List, Dict
+from typing import List, Dict, Union
 
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -19,7 +18,7 @@ def plot_output(output):
     plt.show()
 
 
-def plot_loss(loss_array, directory, batch_size=1):
+def plot_loss(loss_array, directory: Union[str, Path], batch_size=1):
     """ Plotting the evolution of the loss function."""
 
     fig = plt.figure()
@@ -41,8 +40,8 @@ def plot_loss(loss_array, directory, batch_size=1):
     plt.clf()
 
 
-def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory: String, learning_rate: float,
-                        exp_details: String, source_check=None):
+def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory: Union[str, Path], learning_rate: float,
+                        exp_details: str, source_check=None):
     """ Plotting the number of fixpoints in a barchart. """
 
     fig = plt.figure()
@@ -73,8 +72,8 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory:
     plt.clf()
 
 
-def plot_3d(matrices_weights_history, directory, population_size, z_axis_legend, exp_name="experiment", is_trained="",
-            batch_size=1):
+def plot_3d(matrices_weights_history, directory: Union[str, Path], population_size, z_axis_legend,
+            exp_name="experiment", is_trained="", batch_size=1):
     """ Plotting the the weights of the nets in a 3d form using principal component analysis (PCA) """
 
     fig = plt.figure()
@@ -109,7 +108,10 @@ def plot_3d(matrices_weights_history, directory, population_size, z_axis_legend,
     population_size = mpatches.Patch(color="white", label=f"Population: {population_size} networks")
 
     if z_axis_legend == "Self-application":
-        trained = mpatches.Patch(color="white", label=f"Trained: true") if is_trained == "_trained" else mpatches.Patch(color="white", label=f"Trained: false")
+        if is_trained == '_trained':
+            trained = mpatches.Patch(color="white", label=f"Trained: true")
+        else:
+            trained = mpatches.Patch(color="white", label=f"Trained: false")
         ax.legend(handles=[steps, population_size, trained])
     else:
         ax.legend(handles=[steps, population_size])
@@ -134,7 +136,7 @@ def plot_3d(matrices_weights_history, directory, population_size, z_axis_legend,
     plt.show()
 
 
-def plot_3d_self_train(nets_array: List, exp_name: String, directory: String, batch_size: int):
+def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Path], batch_size: int):
     """ Plotting the evolution of the weights in a 3D space when doing self training. """
 
     matrices_weights_history = []
@@ -150,7 +152,7 @@ def plot_3d_self_train(nets_array: List, exp_name: String, directory: String, ba
     return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size)
 
 
-def plot_3d_self_application(nets_array: List, exp_name: String, directory_name: String, batch_size: int) -> None:
+def plot_3d_self_application(nets_array: List, exp_name: str, directory_name: Union[str, Path], batch_size: int) -> None:
     """ Plotting the evolution of the weights in a 3D space when doing self application. """
 
     matrices_weights_history = []
@@ -171,7 +173,7 @@ def plot_3d_self_application(nets_array: List, exp_name: String, directory_name:
     plot_3d(matrices_weights_history, directory_name, len(nets_array), z_axis_legend, exp_name,  is_trained, batch_size)
 
 
-def plot_3d_soup(nets_list, exp_name, directory):
+def plot_3d_soup(nets_list, exp_name, directory: Union[str, Path]):
     """ Plotting the evolution of the weights in a 3D space for the soup environment. """
 
     # This batch size is not relevant for soups. To not affect the number of epochs shown in the 3D plot,
@@ -182,7 +184,7 @@ def plot_3d_soup(nets_list, exp_name, directory):
 
 
 def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_between_SA: int,
-                         SA_steps, directory: String, population_size: int):
+                         SA_steps, directory: Union[str, Path], population_size: int):
     """ Plotting the percentage of fixpoints after each iteration of SA & ST steps. """
 
     fig = plt.figure()
@@ -211,7 +213,7 @@ def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_
     plt.clf()
 
 
-def box_plot(data, directory, population_size):
+def box_plot(data, directory: Union[str, Path], population_size):
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 7))
 
     # ax = fig.add_axes([0, 0, 1, 1])
@@ -232,7 +234,7 @@ def box_plot(data, directory, population_size):
     plt.clf()
 
 
-def write_file(text, directory):
+def write_file(text, directory: Union[str, Path]):
     directory = Path(directory)
     filepath = directory / 'experiment.txt'
     with filepath.open('w+') as f:

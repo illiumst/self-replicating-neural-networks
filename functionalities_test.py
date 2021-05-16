@@ -5,25 +5,12 @@ from torch import Tensor
 from network import Net
 
 
-def overall_fixpoint_test(network: Net, epsilon: float, input_data) -> bool:
-    predicted_values = network(input_data)
-
-    check_smaller_epsilon = all(epsilon > predicted_values)
-    check_greater_epsilon = all(-epsilon < predicted_values)
-
-    if check_smaller_epsilon and check_greater_epsilon:
-        return True
-    else:
-        return False
-
-
 def is_divergent(network: Net) -> bool:
     for i in network.input_weight_matrix():
         weight_value = i[0].item()
 
-        if np.isnan(weight_value) or np.isinf(weight_value):
+        if np.isnan(weight_value).all() or np.isinf(weight_value).all():
             return True
-
     return False
 
 
@@ -33,26 +20,26 @@ def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
     target_data = network.create_target_weights(input_data)
     predicted_values = network(input_data)
 
-    return np.allclose(target_data.detach().numpy(), predicted_values.detach().numpy(), 0, epsilon)
+    return np.allclose(target_data.detach().numpy(), predicted_values.detach().numpy(),
+                       rtol=0, atol=epsilon)
 
 
-def is_zero_fixpoint(network: Net, input_data: Tensor, epsilon=pow(10, -5)) -> bool:
-    # FIXME: Is the the correct test?
-    raise NotImplementedError
-    result = overall_fixpoint_test(network, epsilon, input_data)
-
+def is_zero_fixpoint(network: Net) -> bool:
+    result = bool(len(np.nonzero(network.create_target_weights(network.input_weight_matrix()))))
     return result
 
 
-def is_secondary_fixpoint(network: Net, input_data: Tensor, epsilon: float) -> bool:
+def is_secondary_fixpoint(network: Net, epsilon: float = pow(10, -5)) -> bool:
     """ Secondary fixpoint check is done like this: compare first INPUT with second OUTPUT.
     If they are within the boundaries, then is secondary fixpoint. """
+
+    input_data = network.input_weight_matrix()
+    target_data = network.create_target_weights(input_data)
 
     # Calculating first output
     first_output = network(input_data)
 
     # Getting the second output by initializing a new net with the weights of the original net.
-    # FixMe: Is this correct? I Think it should be the same function thus the same network
     net_copy = copy.deepcopy(network)
     net_copy.apply_weights(first_output)
     input_data_2 = net_copy.input_weight_matrix()
@@ -60,50 +47,33 @@ def is_secondary_fixpoint(network: Net, input_data: Tensor, epsilon: float) -> b
     # Calculating second output
     second_output = network(input_data_2)
 
-    # Perform the Check:
-    check_abs_within_epsilon = all(epsilon > abs(input_data - second_output))
-
-    # FIXME: This is wrong, is it?
-    # check_smaller_epsilon = all(epsilon > second_output)
-    # check_greater_epsilon = all(-epsilon < second_output)
-
-    return True if check_abs_within_epsilon else False
-
-
-def is_weak_fixpoint(network: Net, input_data: Tensor, epsilon: float) -> bool:
-    result = overall_fixpoint_test(network, epsilon, input_data)
-    return result
+    # Perform the Check: all(epsilon > abs(input_data - second_output))
+    check_abs_within_epsilon = np.allclose(target_data.detach().numpy(), second_output.detach().numpy(),
+                                           rtol=0, atol=epsilon)
+    return check_abs_within_epsilon
 
 
 def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
     id_functions = id_functions or None
-    zero_epsilon = pow(10, -5)
-    epsilon = pow(10, -3)
 
     for i in range(len(nets)):
         net = nets[i]
-        input_data = net.input_weight_matrix()
-
         if is_divergent(nets[i]):
             fixpoint_counter["divergent"] += 1
             nets[i].is_fixpoint = "divergent"
-        elif is_identity_function(nets[i], zero_epsilon):
+        elif is_identity_function(nets[i]):  # is default value
             fixpoint_counter["identity_func"] += 1
             nets[i].is_fixpoint = "identity_func"
             id_functions.append(nets[i])
-        elif is_zero_fixpoint(nets[i], input_data, zero_epsilon):
+        elif is_zero_fixpoint(nets[i]):
             fixpoint_counter["fix_zero"] += 1
             nets[i].is_fixpoint = "fix_zero"
-        elif is_weak_fixpoint(nets[i], input_data, epsilon):
-            fixpoint_counter["fix_weak"] += 1
-            nets[i].is_fixpoint = "fix_weak"
-        elif is_secondary_fixpoint(nets[i], input_data, zero_epsilon):
+        elif is_secondary_fixpoint(nets[i]):
             fixpoint_counter["fix_sec"] += 1
             nets[i].is_fixpoint = "fix_sec"
         else:
             fixpoint_counter["other_func"] += 1
             nets[i].is_fixpoint = "other_func"
-
     return id_functions
 
 

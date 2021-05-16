@@ -1,5 +1,4 @@
-from experiments import run_ST_experiment, run_SA_experiment, run_soup_experiment, run_mixed_experiment, \
-    run_robustness_experiment
+from experiments import *
 import random
 
 
@@ -19,17 +18,20 @@ def run_experiments(run_ST, run_SA, run_soup, run_mixed, run_robustness):
     if run_soup:
         print(f"\n Running the soup experiment:")
         run_soup_experiment(soup_population_size, soup_attack_chance, NET_INPUT_SIZE, soup_net_hidden_size,
-                            NET_OUT_SIZE, soup_net_learning_rate, soup_epochs, soup_log_step_size, soup_runs, soup_runs_name,
-                            soup_name_hash, soup_ST_steps, soup_train_nets)
+                            NET_OUT_SIZE, soup_net_learning_rate, soup_epochs, soup_log_step_size, soup_runs,
+                            soup_runs_name, soup_name_hash, soup_ST_steps, soup_train_nets)
     if run_mixed:
         print(f"\n Running the mixed experiment:")
         run_mixed_experiment(mixed_population_size, NET_INPUT_SIZE, mixed_net_hidden_size, NET_OUT_SIZE,
                              mixed_net_learning_rate, mixed_train_nets, mixed_epochs, mixed_SA_steps,
-                             mixed_ST_steps_between_SA, mixed_log_step_size, mixed_name_hash, mixed_total_runs, mixed_runs_name)
+                             mixed_ST_steps_between_SA, mixed_log_step_size, mixed_name_hash, mixed_total_runs,
+                             mixed_runs_name)
     if run_robustness:
         print(f"Running the robustness experiment:")
         run_robustness_experiment(rob_population_size, rob_log_step_size, NET_INPUT_SIZE, rob_net_hidden_size,
-                                  NET_OUT_SIZE, rob_net_learning_rate, rob_ST_steps, rob_runs, rob_runs_name, rob_name_hash)
+                                  NET_OUT_SIZE, rob_net_learning_rate, rob_ST_steps, rob_runs, rob_runs_name,
+                                  rob_name_hash)
+
     if not run_ST and not run_SA and not run_soup and not run_mixed and not run_robustness:
         print(f"No experiments to be run.")
 
@@ -38,9 +40,13 @@ if __name__ == '__main__':
     # Constants:
     NET_INPUT_SIZE = 4
     NET_OUT_SIZE = 1
+    run_ST_experiment_bool = True
+    run_SA_experiment_bool = False
+    run_soup_experiment_bool = False
+    run_mixed_experiment_bool = False
+    run_robustness_bool = False
 
     """ ------------------------------------- Self-training (ST) experiment ------------------------------------- """
-    run_ST_experiment_bool = False
 
     # Define number of runs & name:
     ST_runs = 1
@@ -57,9 +63,6 @@ if __name__ == '__main__':
     ST_name_hash = random.getrandbits(32)
 
     """ ----------------------------------- Self-application (SA) experiment ----------------------------------- """
-
-    run_SA_experiment_bool = False
-
     # Define number of runs, name, etc.:
     SA_runs_name = "test-17"
     SA_runs = 2
@@ -81,9 +84,6 @@ if __name__ == '__main__':
     SA_name_hash = random.getrandbits(32)
 
     """ -------------------------------------------- Soup experiment -------------------------------------------- """
-
-    run_soup_experiment_bool = False
-
     # Define number of runs, name, etc.:
     soup_runs = 1
     soup_runs_name = "test-16"
@@ -106,8 +106,6 @@ if __name__ == '__main__':
     soup_name_hash = random.getrandbits(32)
 
     """ ------------------------------------------- Mixed experiment -------------------------------------------- """
-
-    run_mixed_experiment_bool = False
 
     # Define number of runs, name, etc.:
     mixed_runs_name = "test-17"
@@ -132,8 +130,6 @@ if __name__ == '__main__':
     mixed_name_hash = random.getrandbits(32)
 
     """ ----------------------------------------- Robustness experiment ----------------------------------------- """
-    run_robustness_bool = True
-
     # Define number of runs & name:
     rob_runs = 3
     rob_runs_name = "test-07"

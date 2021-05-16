@@ -5,7 +5,7 @@ from pathlib import Path
 from visualization import line_chart_fixpoints, bar_chart_fixpoints
 
 
-def summary_fixpoint_experiment(runs, population_size, epochs, experiments, net_learning_rate, directory_name,
+def summary_fixpoint_experiment(runs, population_size, epochs, experiments, net_learning_rate, directory,
                                 summary_pre_title):
     avg_fixpoint_counters = {
         "avg_identity_func": 0,
@@ -36,7 +36,7 @@ def summary_fixpoint_experiment(runs, population_size, epochs, experiments, net_
     # Plotting the summary
     source_checker = "summary"
     exp_details = f"{summary_pre_title}: {runs} runs & {epochs} epochs each."
-    bar_chart_fixpoints(avg_fixpoint_counters, population_size, directory_name, net_learning_rate, exp_details,
+    bar_chart_fixpoints(avg_fixpoint_counters, population_size, directory, net_learning_rate, exp_details,
                         source_checker)
 
 
