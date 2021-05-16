@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 from sklearn.decomposition import PCA
-import os.path
 import random
 import string
 
@@ -20,7 +19,7 @@ def plot_output(output):
     plt.show()
 
 
-def plot_loss(loss_array, directory_name, batch_size=1):
+def plot_loss(loss_array, directory, batch_size=1):
     """ Plotting the evolution of the loss function."""
 
     fig = plt.figure()
@@ -34,15 +33,15 @@ def plot_loss(loss_array, directory_name, batch_size=1):
     plt.xlabel("Epochs")
     plt.ylabel("Loss")
 
-    filepath = f"./{directory_name}"
-    filename = f"{filepath}/_nets_loss_function.png"
-    plt.savefig(f"{filename}")
+    directory = Path(directory)
+    filename = "nets_loss_function.png"
+    file_path = directory / filename
+    plt.savefig(str(file_path))
 
-    # plt.show()
     plt.clf()
 
 
-def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory_name: String, learning_rate: float,
+def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory: String, learning_rate: float,
                         exp_details: String, source_check=None):
     """ Plotting the number of fixpoints in a barchart. """
 
@@ -66,15 +65,15 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory_
     plt.bar(range(len(fixpoint_counter)), list(fixpoint_counter.values()), align='center')
     plt.xticks(range(len(fixpoint_counter)), list(fixpoint_counter.keys()))
 
-    filepath = f"./{directory_name}"
-    filename = f"{filepath}/{str(population_size)}_nets_fixpoints_barchart.png"
-    plt.savefig(f"{filename}")
+    directory = Path(directory)
+    filename = f"{str(population_size)}_nets_fixpoints_barchart.png"
+    filepath = directory / filename
+    plt.savefig(str(filepath))
 
     plt.clf()
-    # plt.show()
 
 
-def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legend, exp_name="experiment", is_trained="",
+def plot_3d(matrices_weights_history, directory, population_size, z_axis_legend, exp_name="experiment", is_trained="",
             batch_size=1):
     """ Plotting the the weights of the nets in a 3d form using principal component analysis (PCA) """
 
@@ -121,10 +120,10 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
     ax.set_zlabel(f"Epochs")
 
     # FIXME: Replace this kind of operation with pathlib.Path() object interactions
-    folder = Path(folder_name)
-    folder.mkdir(parents=True, exist_ok=True)
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
     filename = f"{exp_name}{is_trained}.png"
-    filepath = folder / filename
+    filepath = directory / filename
     if filepath.exists():
         letters = string.ascii_lowercase
         random_letters = ''.join(random.choice(letters) for _ in range(5))
@@ -133,10 +132,9 @@ def plot_3d(matrices_weights_history, folder_name, population_size, z_axis_legen
         plt.savefig(str(filepath))
 
     plt.show()
-    #plt.clf()
 
 
-def plot_3d_self_train(nets_array: List, exp_name: String, directory_name: String, batch_size: int):
+def plot_3d_self_train(nets_array: List, exp_name: String, directory: String, batch_size: int):
     """ Plotting the evolution of the weights in a 3D space when doing self training. """
 
     matrices_weights_history = []
@@ -149,7 +147,7 @@ def plot_3d_self_train(nets_array: List, exp_name: String, directory_name: Strin
 
     z_axis_legend = "epochs"
 
-    return plot_3d(matrices_weights_history, directory_name, len(nets_array), z_axis_legend, exp_name, "", batch_size)
+    return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size)
 
 
 def plot_3d_self_application(nets_array: List, exp_name: String, directory_name: String, batch_size: int) -> None:
@@ -168,23 +166,23 @@ def plot_3d_self_application(nets_array: List, exp_name: String, directory_name:
         else:
             is_trained = "_not_trained"
 
+    # Fixme: Are the both following lines on the correct intendation? -> Value of "is_trained" changes multiple times!
     z_axis_legend = "epochs"
-
     plot_3d(matrices_weights_history, directory_name, len(nets_array), z_axis_legend, exp_name,  is_trained, batch_size)
 
 
-def plot_3d_soup(nets_list, exp_name, directory_name):
+def plot_3d_soup(nets_list, exp_name, directory):
     """ Plotting the evolution of the weights in a 3D space for the soup environment. """
 
     # This batch size is not relevant for soups. To not affect the number of epochs shown in the 3D plot,
     # will send forward the number "1" for batch size with the variable <irrelevant_batch_size>.
     irrelevant_batch_size = 1
 
-    plot_3d_self_train(nets_list, exp_name, directory_name, irrelevant_batch_size)
+    plot_3d_self_train(nets_list, exp_name, directory, irrelevant_batch_size)
 
 
 def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_between_SA: int,
-                         SA_steps, directory_name: String, population_size: int):
+                         SA_steps, directory: String, population_size: int):
     """ Plotting the percentage of fixpoints after each iteration of SA & ST steps. """
 
     fig = plt.figure()
@@ -205,15 +203,15 @@ def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_
 
     plt.plot(ST_steps_per_SA, fixpoint_counters_history, color="green", marker="o")
 
-    filepath = f"./{directory_name}"
-    filename = f"{filepath}/{str(population_size)}_nets_fixpoints_linechart.png"
-    plt.savefig(f"{filename}")
+    directory = Path(directory)
+    filename = f"{str(population_size)}_nets_fixpoints_linechart.png"
+    filepath = directory / filename
+    plt.savefig(str(filepath))
 
     plt.clf()
-    # plt.show()
 
 
-def box_plot(data, directory_name, population_size):
+def box_plot(data, directory, population_size):
     fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(10, 7))
 
     # ax = fig.add_axes([0, 0, 1, 1])
@@ -226,16 +224,17 @@ def box_plot(data, directory_name, population_size):
     axs[1].boxplot(data)
     axs[1].set_title('Box plot')
 
-    filepath = f"./{directory_name}"
-    filename = f"{filepath}/{str(population_size)}_nets_fixpoints_barchart.png"
-    plt.savefig(f"{filename}")
+    directory = Path(directory)
+    filename = f"{str(population_size)}_nets_fixpoints_barchart.png"
+    filepath = directory / filename
 
-    # plt.show()
+    plt.savefig(str(filepath))
     plt.clf()
 
 
-def write_file(text, directory_name):
-    filepath = f"./{directory_name}"
-    f = open(f"{filepath}/experiment.txt", "w+")
-    f.write(text)
-    f.close()
+def write_file(text, directory):
+    directory = Path(directory)
+    filepath = directory / 'experiment.txt'
+    with filepath.open('w+') as f:
+        f.write(text)
+        f.close()

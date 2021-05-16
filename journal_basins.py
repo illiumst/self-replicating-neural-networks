@@ -67,7 +67,7 @@ class SpawnExperiment:
         return network
 
     def __init__(self, population_size, log_step_size, net_input_size, net_hidden_size, net_out_size, net_learning_rate,
-                 epochs, st_steps, noise, directory_name) -> None:
+                 epochs, st_steps, noise, directory) -> None:
         self.population_size = population_size
         self.log_step_size = log_step_size
         self.net_input_size = net_input_size
@@ -81,7 +81,7 @@ class SpawnExperiment:
         self.noise = noise or 10e-5
         print("\nNOISE:", self.noise)
 
-        self.directory = Path(directory_name)
+        self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
 
         self.populate_environment()
@@ -150,13 +150,13 @@ class SpawnExperiment:
 
     def weights_evolution_3d_experiment(self):
         exp_name = f"ST_{str(len(self.nets))}_nets_3d_weights_PCA"
-        return plot_3d_self_train(self.nets, exp_name, self.directory.name, self.log_step_size)
+        return plot_3d_self_train(self.nets, exp_name, self.directory, self.log_step_size)
 
     def visualize_loss(self):
         for i in range(len(self.nets)):
             net_loss_history = self.nets[i].loss_history
             self.loss_history.append(net_loss_history)
-        plot_loss(self.loss_history, self.directory.name)
+        plot_loss(self.loss_history, self.directory)
 
 
 if __name__ == "__main__":
@@ -189,5 +189,5 @@ if __name__ == "__main__":
             epochs=ST_epochs,
             st_steps=ST_steps,
             noise=pow(10, -noise_factor),
-            directory_name=f"./experiments/spawn_basin/{ST_name_hash}_10e-{noise_factor}"
+            directory=Path('output') / 'spawn_basin' / f'{ST_name_hash}_10e-{noise_factor}'
         )
