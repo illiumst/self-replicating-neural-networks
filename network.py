@@ -147,10 +147,12 @@ class Net(nn.Module):
             # Saving the weights history after a certain amount of steps (aka log_step_size) for research purposes.
             # If self-application steps are lower than 10, then append weight history after each SA step.
             if SA_steps < 10:
-                self.s_application_weights_history.append(output.T.detach().numpy())
+                weights = self.create_target_weights(self.input_weight_matrix())
+                self.s_application_weights_history.append(weights.T.detach().numpy())
             else:
+                weights = self.create_target_weights(self.input_weight_matrix())
                 if i % log_step_size == 0:
-                    self.s_application_weights_history.append(output.T.detach().numpy())
+                    self.s_application_weights_history.append(weights.T.detach().numpy())
 
             """ See after how many steps of SA is the output not changing anymore: """
             # print(f"Self-app. step {i+1}: {Experiment.changing_rate(output2, output)}")
