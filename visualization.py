@@ -73,7 +73,7 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory:
 
 
 def plot_3d(matrices_weights_history, directory: Union[str, Path], population_size, z_axis_legend,
-            exp_name="experiment", is_trained="", batch_size=1):
+            exp_name="experiment", is_trained="", batch_size=1, plot_pca_together=True):
     """ Plotting the the weights of the nets in a 3d form using principal component analysis (PCA) """
 
     fig = plt.figure()
@@ -83,26 +83,58 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
     pca = PCA(n_components=2, whiten=True)
     ax = plt.axes(projection='3d')
 
-    loop_matrices_weights_history = tqdm(range(len(matrices_weights_history)))
-    for i in loop_matrices_weights_history:
-        loop_matrices_weights_history.set_description("Plotting weights 3D PCA %s" % i)
+    if plot_pca_together:
+        weight_histories = []
+        start_times = []
 
-        weight_matrix, start_time = matrices_weights_history[i]
-        weight_matrix = np.array(weight_matrix)
-        n, x, y = weight_matrix.shape
-        weight_matrix = weight_matrix.reshape(n, x * y)
+        for wh, st in matrices_weights_history:
+            start_times.append(st)
+            wm = np.array(wh)
+            n, x, y = wm.shape
+            wm = wm.reshape(n, x * y)
+            #print(wm.shape, wm)
+            weight_histories.append(wm)
 
-        pca.fit(weight_matrix)
-        weight_matrix_pca = pca.transform(weight_matrix)
+        weight_data = np.array(weight_histories)
+        n, x, y = weight_data.shape
+        weight_data = weight_data.reshape(n*x, y)
+        
+        pca.fit(weight_data)
+        weight_data_pca = pca.transform(weight_data)
 
-        xdata, ydata = [], []
-        for j in range(len(weight_matrix_pca)):
-            xdata.append(weight_matrix_pca[j][0])
-            ydata.append(weight_matrix_pca[j][1])
-        zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size).tolist()
+        for transformed_trajectory, start_time in zip(np.split(weight_data_pca, n), start_times):
+            start_log_time = int(start_time / batch_size)
+            #print(start_time, start_log_time)
+            xdata = transformed_trajectory[start_log_time:, 0]
+            ydata = transformed_trajectory[start_log_time:, 1]
+            zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size).tolist()
+            ax.plot3D(xdata, ydata, zdata, label=f"net")
+            ax.scatter(xdata, ydata, zdata, s=7)
+    
+    else:
+        loop_matrices_weights_history = tqdm(range(len(matrices_weights_history)))
+        for i in loop_matrices_weights_history:
+            loop_matrices_weights_history.set_description("Plotting weights 3D PCA %s" % i)
 
-        ax.plot3D(xdata, ydata, zdata)
-        ax.scatter(np.array(xdata), np.array(ydata), np.array(zdata), s=7)
+            weight_matrix, start_time = matrices_weights_history[i]
+            weight_matrix = np.array(weight_matrix)
+            n, x, y = weight_matrix.shape
+            weight_matrix = weight_matrix.reshape(n, x * y)
+
+            pca.fit(weight_matrix)
+            weight_matrix_pca = pca.transform(weight_matrix)
+
+            xdata, ydata = [], []
+
+            start_log_time = int(start_time / 10)  
+
+            for j in range(start_log_time, len(weight_matrix_pca)):
+                xdata.append(weight_matrix_pca[j][0])
+                ydata.append(weight_matrix_pca[j][1])
+            zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size).tolist()
+
+            ax.plot3D(xdata, ydata, zdata, label=f"net {i}")
+            ax.scatter(np.array(xdata), np.array(ydata), np.array(zdata), s=7)
 
     steps = mpatches.Patch(color="white", label=f"{z_axis_legend}: {len(matrices_weights_history)} steps")
     population_size = mpatches.Patch(color="white", label=f"Population: {population_size} networks")
@@ -146,7 +178,7 @@ def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Pa
         loop_nets_array.set_description("Creating ST weights history %s" % i)
 
         matrices_weights_history.append( (nets_array[i].s_train_weights_history, nets_array[i].start_time) )
-
+        
     z_axis_legend = "epochs"
 
     return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size)

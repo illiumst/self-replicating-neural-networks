@@ -8,7 +8,7 @@ from functionalities_test import is_identity_function
 from network import Net
 from visualization import plot_3d_self_train, plot_loss
 import numpy as np
-
+from tabulate import tabulate
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import mean_squared_error as MSE
 
@@ -44,10 +44,36 @@ def distance_matrix(nets, distance="MIM", print_it=True):
                 matrix[net][other_net] = mean_invariate_manhattan_distance(weights, other_weights)
 
     if print_it:
-        print(f"\nDistance matrix [{distance}]:")
-        [print(row) for row in matrix]
+        print(f"\nDistance matrix (all to all) [{distance}]:")
+        headers = [i.name for i in nets]
+        print(tabulate(matrix, showindex=headers, headers=headers, tablefmt='orgtbl'))
     return matrix
 
+
+def distance_from_parent(nets, distance="MIM", print_it=True):
+    parents = list(filter(lambda x: "clone" not in x.name and is_identity_function(x), nets))
+    distance_range = range(10)
+    for parent in parents:
+      parent_weights = parent.create_target_weights(parent.input_weight_matrix())
+      clones = list(filter(lambda y: parent.name in y.name and parent.name != y.name, nets))
+      matrix = [[0 for _ in distance_range] for _ in range(len(clones))]
+
+      for dist in distance_range:
+        for idx, clone in enumerate(clones):
+            clone_weights = clone.create_target_weights(clone.input_weight_matrix()) 
+            if distance in ["MSE"]:
+                matrix[idx][dist] = MSE(parent_weights, clone_weights) < pow(10, -dist)
+            elif distance in ["MAE"]:
+                matrix[idx][dist] = MAE(parent_weights, clone_weights) < pow(10, -dist)
+            elif distance in ["MIM"]:
+                matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10, -dist)
+      if print_it:
+          print(f"\nDistances from parent {parent.name} [{distance}]:")
+          col_headers = [str(f"10e-{d}") for d in distance_range]
+          row_headers = [str(f"clone_{i}") for i in range(len(clones))]
+          print(tabulate(matrix, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
+    
+    return matrix
 
 class SpawnExperiment:
 
@@ -58,16 +84,16 @@ class SpawnExperiment:
         for layer_id, layer_name in enumerate(network.state_dict()):
             for line_id, line_values in enumerate(network.state_dict()[layer_name]):
                 for weight_id, weight_value in enumerate(network.state_dict()[layer_name][line_id]):
-                    # network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
+                    #network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
                     if prng() < 0.5:
                         network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
                     else:
                         network.state_dict()[layer_name][line_id][weight_id] = weight_value - noise
-
+                    
         return network
 
     def __init__(self, population_size, log_step_size, net_input_size, net_hidden_size, net_out_size, net_learning_rate,
-                 epochs, st_steps, noise, directory) -> None:
+                 epochs, st_steps, nr_clones, noise, directory) -> None:
         self.population_size = population_size
         self.log_step_size = log_step_size
         self.net_input_size = net_input_size
@@ -78,6 +104,7 @@ class SpawnExperiment:
         self.ST_steps = st_steps
         self.loss_history = []
         self.nets = []
+        self.nr_clones = nr_clones
         self.noise = noise or 10e-5
         print("\nNOISE:", self.noise)
 
@@ -89,6 +116,7 @@ class SpawnExperiment:
         self.weights_evolution_3d_experiment()
         # self.visualize_loss()
         distance_matrix(self.nets)
+        distance_from_parent(self.nets)
 
     def populate_environment(self):
         loop_population_size = tqdm(range(self.population_size))
@@ -105,33 +133,40 @@ class SpawnExperiment:
             # {net.input_weight_matrix()}\nLossHistory: {net.loss_history[-10:]}")
             self.nets.append(net)
 
-    def spawn_and_continue(self, number_spawns: int = 5):
+    def spawn_and_continue(self, number_clones: int = None):
+        number_clones = number_clones or self.nr_clones
+
         # For every initial net {i} after populating (that is fixpoint after first epoch);
         for i in range(self.population_size):
             net = self.nets[i]
-
+            # We set parent start_time to just before this epoch ended, so plotting is zoomed in. Comment out to
+            # to see full trajectory (but the clones will be very hard to see). 
+            # Make one target to compare distances to clones later when they have trained.
+            net.start_time = self.ST_steps - 150
             net_input_data = net.input_weight_matrix()
             net_target_data = net.create_target_weights(net_input_data)
+            
             if is_identity_function(net):
                 print(f"\nNet {i} is fixpoint")
-                # print("\nNet weights before training\n", target_data)
 
                 # Clone the fixpoint x times and add (+-)self.noise to weight-sets randomly;
                 # To plot clones starting after first epoch (z=ST_steps), set that as start_time!
-                for j in range(number_spawns):
+                # To make sure PCA will plot the same trajectory up until this point, we clone the
+                # parent-net's weight history as well.
+                for j in range(number_clones):
                     clone = Net(net.input_size, net.hidden_size, net.out_size,
-                                f"ST_net_{str(i)}_clone_{str(j)}",
-                                start_time=self.ST_steps)
+                                f"ST_net_{str(i)}_clone_{str(j)}", start_time=self.ST_steps)
                     clone.load_state_dict(copy.deepcopy(net.state_dict()))
                     rand_noise = prng() * self.noise
                     clone = self.apply_noise(clone, rand_noise)
+                    clone.s_train_weights_history = copy.deepcopy(net.s_train_weights_history)
+                    clone.number_trained = copy.deepcopy(net.number_trained)
 
                     # Then finish training each clone {j} (for remaining epoch-1 * ST_steps)
-                    # and add to nets for plotting;
+                    # and add to nets for plotting if they are fixpoints themselves;
                     for _ in range(self.epochs - 1):
                         for _ in range(self.ST_steps):
                             clone.self_train(1, self.log_step_size, self.net_learning_rate)
-                    # print(f"clone {j} last weights: {target_data}, noise {noise}")
                     if is_identity_function(clone):
                         input_data = clone.input_weight_matrix()
                         target_data = clone.create_target_weights(input_data)
@@ -143,7 +178,6 @@ class SpawnExperiment:
                 for _ in range(self.epochs - 1):
                     for _ in range(self.ST_steps):
                         net.self_train(1, self.log_step_size, self.net_learning_rate)
-                # print("\nNet weights after training \n", target_data)
 
         else:
             print("No fixpoints found.")
@@ -167,18 +201,19 @@ if __name__ == "__main__":
     # Define number of runs & name:
     ST_runs = 1
     ST_runs_name = "test-27"
-    ST_steps = 1500
+    ST_steps = 1700
     ST_epochs = 2
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
+    nr_clones = 5
     ST_population_size = 1
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)
 
     print(f"Running the Spawn experiment:")
-    for noise_factor in range(3, 6):
+    for noise_factor in range(2,3):
         SpawnExperiment(
             population_size=ST_population_size,
             log_step_size=ST_log_step_size,
@@ -188,6 +223,7 @@ if __name__ == "__main__":
             net_learning_rate=ST_net_learning_rate,
             epochs=ST_epochs,
             st_steps=ST_steps,
+            nr_clones=nr_clones,
             noise=pow(10, -noise_factor),
             directory=Path('output') / 'spawn_basin' / f'{ST_name_hash}_10e-{noise_factor}'
         )
