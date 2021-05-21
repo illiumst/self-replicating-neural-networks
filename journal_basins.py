@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import pickle
 
 from tqdm import tqdm
 import random
@@ -51,29 +52,33 @@ def distance_matrix(nets, distance="MIM", print_it=True):
 
 
 def distance_from_parent(nets, distance="MIM", print_it=True):
+    list_of_matrices = []
     parents = list(filter(lambda x: "clone" not in x.name and is_identity_function(x), nets))
     distance_range = range(10)
     for parent in parents:
-      parent_weights = parent.create_target_weights(parent.input_weight_matrix())
-      clones = list(filter(lambda y: parent.name in y.name and parent.name != y.name, nets))
-      matrix = [[0 for _ in distance_range] for _ in range(len(clones))]
+        parent_weights = parent.create_target_weights(parent.input_weight_matrix())
+        clones = list(filter(lambda y: parent.name in y.name and parent.name != y.name, nets))
+        matrix = [[0 for _ in distance_range] for _ in range(len(clones))]
 
-      for dist in distance_range:
-        for idx, clone in enumerate(clones):
-            clone_weights = clone.create_target_weights(clone.input_weight_matrix()) 
-            if distance in ["MSE"]:
-                matrix[idx][dist] = MSE(parent_weights, clone_weights) < pow(10, -dist)
-            elif distance in ["MAE"]:
-                matrix[idx][dist] = MAE(parent_weights, clone_weights) < pow(10, -dist)
-            elif distance in ["MIM"]:
-                matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10, -dist)
-      if print_it:
-          print(f"\nDistances from parent {parent.name} [{distance}]:")
-          col_headers = [str(f"10e-{d}") for d in distance_range]
-          row_headers = [str(f"clone_{i}") for i in range(len(clones))]
-          print(tabulate(matrix, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
+        for dist in distance_range:
+            for idx, clone in enumerate(clones):
+                clone_weights = clone.create_target_weights(clone.input_weight_matrix()) 
+                if distance in ["MSE"]:
+                    matrix[idx][dist] = MSE(parent_weights, clone_weights) < pow(10, -dist)
+                elif distance in ["MAE"]:
+                    matrix[idx][dist] = MAE(parent_weights, clone_weights) < pow(10, -dist)
+                elif distance in ["MIM"]:
+                    matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10, -dist)
+
+        if print_it:
+            print(f"\nDistances from parent {parent.name} [{distance}]:")
+            col_headers = [str(f"10e-{d}") for d in distance_range]
+            row_headers = [str(f"clone_{i}") for i in range(len(clones))]
+            print(tabulate(matrix, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
+
+        list_of_matrices.append(matrix)
     
-    return matrix
+    return list_of_matrices
 
 class SpawnExperiment:
 
@@ -115,8 +120,10 @@ class SpawnExperiment:
         self.spawn_and_continue()
         self.weights_evolution_3d_experiment()
         # self.visualize_loss()
-        distance_matrix(self.nets)
-        distance_from_parent(self.nets)
+        self.distance_matrix = distance_matrix(self.nets)
+        self.parent_clone_distances = distance_from_parent(self.nets)
+
+        self.save()
 
     def populate_environment(self):
         loop_population_size = tqdm(range(self.population_size))
@@ -184,7 +191,7 @@ class SpawnExperiment:
 
     def weights_evolution_3d_experiment(self):
         exp_name = f"ST_{str(len(self.nets))}_nets_3d_weights_PCA"
-        return plot_3d_self_train(self.nets, exp_name, self.directory, self.log_step_size)
+        return plot_3d_self_train(self.nets, exp_name, self.directory, self.log_step_size, plot_pca_together=True)
 
     def visualize_loss(self):
         for i in range(len(self.nets)):
@@ -192,6 +199,10 @@ class SpawnExperiment:
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
 
+
+    def save(self):
+        pickle.dump(self, open(f"{self.directory}/experiment_pickle.p", "wb"))
+        print(f"\nSaved experiment to {self.directory}.")
 
 if __name__ == "__main__":
 

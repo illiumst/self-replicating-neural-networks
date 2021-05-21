@@ -1,27 +1,26 @@
-# code ALIFE paper journal edition
+# self-rep NN paper - ALIFE journal edition
 
-- see journal_basins.py for the "train -> spawn with noise -> train again and see where they end up" first draft. Apply noise follows the `vary` function that was used in the paper robustness test with `+- prng() * eps`. Change if desired.
-- has some interesting results, but maybe due to PCA the newly spawned weights + noise get plotted quite a bit aways from the parent particle, even though the weights are similar to 10e-8?
-- see journal_basins.py for an attempt at a distance matrix between the nets/end_weight_states of an experiment. Also has the position-invariant-manhattan-distance as option. (checks n^2, neither fast nor elegant ;D )
-- i forgot what "sanity check for the beacon" meant but we leave that out anyway, right?
+- [x] Plateau / Pillar sizeWhat does happen to the fixpoints after noise introduction and retraining?Options beeing: Same Fixpoint, Similar Fixpoint (Basin), Different Fixpoint?Do they do the clustering thingy?
+
+    - see journal_basins.py for the "train -> spawn with noise -> train again and see where they end up" functionality. Apply noise follows the `vary` function that was used in the paper robustness test with `+- prng() * eps`. Change if desired.
+
+    - there is also a distance matrix for all-to-all particle comparisons (with distance parameter one of: `MSE`, `MAE` (mean absolute error = mean manhattan) and `MIM` (mean position invariant manhattan))
 
 
-## Some changes from cristian's code (or suggestions, rather)
+- [ ] Same Thing with Soup interactionWe would expect the same behaviour...Influence of interaction with near and far away particles.
 
-This is just my understanding, I might be wrong here. Just a short writeup of what I noticed from trying to implement the new experiments. 
-EDIT: I also saw that you updated your branch, so some of these things might have already been adressed.  
+- [ ] Robustness test with a trained NetworkTraining for high quality fixpoints, compare with the "perfect" fixpoint.Average Loss per application step
 
-1. I think, id_function is only training to reproduce the *very first weight* configuration, right? Now I see where the confusion is. But according to my understanding the selfrep networks gets trained with the task to ouput the *current weights at each training timestep*, so dynamic targets as the weight learns until it stabilizes/converges. I have changed that accordingly in the experiments to produce one input/target **per step** and train on that once (batch_size 1) for e.g. ST_step many times (not ST_many times on the inital one input/target).
+- [ ] Adjust Self Training so that it favors second order fixpoints-> Second order test implementation (?)
 
-2. Not sure about this one but: Train only seems to save the *output* (i.e, the prediction, not the net weight states)? Semantically this changes the 3d trajectories from the papers:
-    - "the trajectory dont change anymore because the *weights* are always the same" , ie. the backprop gradient doesnt change anything because the loss of the prediction is basically nonexistant,
-    - to "the net has learned to return the input vector 1:1 (id_function, yes) and the *output* prediction is the *same* everytime". Eventually weights == output == target_data, but we are interested in the weight states trajectory during learning and not really the output, i guess (because we know that the output will eventually converge to the right prediction of the weighs, but not how the weights develop during training to accomodate this ability). Logging target_data would be better because that is basically the weights at each step we are aiming for. Thats what i am using now at least.
 
-3. robustness test doesnt seem to self apply the prediction currently, it only changes the weights (apply weights ≠ self.apply), right? Thats why the Readme has the notice "never fails for the smaller values", because it only adds epsilon small enough to not destroy the fixpoint property (10e-6 onwards) and not actually tries to self-apply. If the changed weights + noise small enough = fixpoint, then it will always hold without change (i.e., without the actual self application). Also the noise is *on the input*, which is a robustness-test for id_function, yes, while the paper experiment has the noise *on the weights*. Semantically, noise on the input asks "can the same net/weights produce the same input/output even when we change the output", which of course not. But the output may be changed (small enough) that its within epsilon-degree of change and therefore not looses the fixpoint property. 
-The robustness exp in the paper tests self-application resistance, which means how much faster do the nets loose prediction-accuracy on self-application when weights get x-amount of noise. They all loose precision even without noise (see the paper, self-application is by nature a value degrading operation/predicion closer to 0-values, "easier to predict"), its "just" the visualisation of how much faster it collapses to the 0-fixpoint with different amounts of noise on weight (and since the nets sample from within their own weights, on the input as well; weights => input).
+---
+## Notes: 
 
-4. getting randdigit for the path destroys save-order, no? Makes finding stuff tricky. IRC thats why steffen used timestamps, they are ordered ascendingly?
+- In the spawn-experiment we now fit and transform the PCA over *ALL* trajectories, instead of each net-history by its own. This can be toggled by the `plot_pca_together` parameter in `visualisation.py/plot_3d_self_train() & plot_3d()` (default: `False` but set `True` in the spawn-experiment class).
 
-5. the normalize() is different from the paper, right? It gets normalized over len(state_dict) = 14, not over the positional encoding of each layer / cell / weight_value?
+- I have also added a `start_time` property for the nets (default: `1`). This is intended to be set flexibly for e.g., clones (when they are spawned midway through the experiment), such that the PCA can start the plotting trace from this timestep. When we spawn clones we deepcopy their parent's saved weight_history too, so that the PCA transforms same lenght trajectories. With `plot_pca_together` that means that clones and their parents will literally be plotted perfectly overlayed on top, up until the spawn-time, where you can see the offset / noise we apply. By setting the start_time, you can avoid this overlap and avoid hiding the parent's trace color which gets plotted first (because the parent is always added to self.nets first). **But more importantly, you can effectively zoom into the plot, by setting the parents start-time to just shy of the end of first epoch (where they get checked on fixpoint-property and spawn clones) and the start-times of clones to the second epoch. This will make the plot begin at spawn time, cutting off the parents initial trajectory and zoom-in to the action (see. `journal_basins.py/spawn_and_continue()`).**
 
-6. test_for_fixpoint doesnt return/or set the id_functions array? How does that work? Do you then just filter all nets with the fitting "string" property somewhere?
+- I saved the whole experiment class as pickle dump (`experiment_pickle.p`, just like cristian), hope thats fine.
+
+- I have also added a `requirement.txt` for quick venv / pip -r installs. Append as necessary.  

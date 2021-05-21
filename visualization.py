@@ -73,7 +73,7 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory:
 
 
 def plot_3d(matrices_weights_history, directory: Union[str, Path], population_size, z_axis_legend,
-            exp_name="experiment", is_trained="", batch_size=1, plot_pca_together=True):
+            exp_name="experiment", is_trained="", batch_size=1, plot_pca_together=False):
     """ Plotting the the weights of the nets in a 3d form using principal component analysis (PCA) """
 
     fig = plt.figure()
@@ -168,7 +168,7 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
     plt.show()
 
 
-def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Path], batch_size: int):
+def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Path], batch_size: int, plot_pca_together: bool):
     """ Plotting the evolution of the weights in a 3D space when doing self training. """
 
     matrices_weights_history = []
@@ -181,7 +181,7 @@ def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Pa
         
     z_axis_legend = "epochs"
 
-    return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size)
+    return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size, plot_pca_together=plot_pca_together)
 
 
 def plot_3d_self_application(nets_array: List, exp_name: str, directory_name: Union[str, Path], batch_size: int) -> None:
