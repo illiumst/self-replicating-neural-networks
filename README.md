@@ -13,6 +13,8 @@
     
     - see `journal_robustness.py` for robustness test modeled after cristians robustness-exp (with the exeption that we put noise on the weights). Has `synthetic` bool to switch to hand-modeled perfect fixpoint instead of naturally trained ones. 
 
+    - Also added two difference between the "time-as-fixpoint" and "time-to-verge" (i.e. to divergence / zero).
+
     - We might need to consult about the "average loss per application step", as I think application loss get gradually higher the worse the weights get. So the average might not tell us much here.
 
 - [ ] Adjust Self Training so that it favors second order fixpoints-> Second order test implementation (?)
