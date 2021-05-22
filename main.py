@@ -131,13 +131,13 @@ if __name__ == '__main__':
 
     """ ----------------------------------------- Robustness experiment ----------------------------------------- """
     # Define number of runs & name:
-    rob_runs = 3
+    rob_runs = 1
     rob_runs_name = "test-07"
-    rob_ST_steps = 500
+    rob_ST_steps = 1500
     rob_log_step_size = 10
 
     # Define number of networks & their architecture
-    rob_population_size = 6
+    rob_population_size = 1
     rob_net_hidden_size = 2
 
     rob_net_learning_rate = 0.04

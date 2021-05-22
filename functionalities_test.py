@@ -24,9 +24,9 @@ def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
                        rtol=0, atol=epsilon)
 
 
-def is_zero_fixpoint(network: Net) -> bool:
+def is_zero_fixpoint(network: Net) -> bool:    
     result = bool(len(np.nonzero(network.create_target_weights(network.input_weight_matrix()))))
-    return result
+    return not result
 
 
 def is_secondary_fixpoint(network: Net, epsilon: float = pow(10, -5)) -> bool:
@@ -56,24 +56,23 @@ def is_secondary_fixpoint(network: Net, epsilon: float = pow(10, -5)) -> bool:
 def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
     id_functions = id_functions or list()
 
-    for i in range(len(nets)):
-        net = nets[i]
-        if is_divergent(nets[i]):
+    for net in nets:
+        if is_divergent(net):
             fixpoint_counter["divergent"] += 1
-            nets[i].is_fixpoint = "divergent"
-        elif is_identity_function(nets[i]):  # is default value
+            net.is_fixpoint = "divergent"
+        elif is_identity_function(net):  # is default value
             fixpoint_counter["identity_func"] += 1
-            nets[i].is_fixpoint = "identity_func"
-            id_functions.append(nets[i])
-        elif is_zero_fixpoint(nets[i]):
+            net.is_fixpoint = "identity_func"
+            id_functions.append(net)
+        elif is_zero_fixpoint(net):
             fixpoint_counter["fix_zero"] += 1
-            nets[i].is_fixpoint = "fix_zero"
-        elif is_secondary_fixpoint(nets[i]):
+            net.is_fixpoint = "fix_zero"
+        elif is_secondary_fixpoint(net):
             fixpoint_counter["fix_sec"] += 1
-            nets[i].is_fixpoint = "fix_sec"
+            net.is_fixpoint = "fix_sec"
         else:
             fixpoint_counter["other_func"] += 1
-            nets[i].is_fixpoint = "other_func"
+            net.is_fixpoint = "other_func"
     return id_functions
 
 
