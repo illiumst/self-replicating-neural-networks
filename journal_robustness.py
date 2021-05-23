@@ -9,10 +9,7 @@ import numpy as np
 from pathlib import Path
 from tqdm import tqdm
 from tabulate import tabulate
-from sklearn.metrics import mean_absolute_error as MAE
-from sklearn.metrics import mean_squared_error as MSE
 
-from journal_basins import mean_invariate_manhattan_distance as MIM
 from functionalities_test import is_identity_function, is_zero_fixpoint, test_for_fixpoints, is_divergent
 from network import Net
 from torch.nn import functional as F
@@ -153,7 +150,11 @@ class RobustnessComparisonExperiment:
         # sns.set(rc={'figure.figsize': (10, 50)})
         bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
                          col='noise_level', col_wrap=3, showfliers=False)
-        plt.show()
+        directory = Path('output') / 'robustness'
+        filename = f"absolute_loss_perapplication_boxplot_grid.png"
+        filepath = directory / filename
+
+        plt.savefig(str(filepath))
 
         if print_it:
             col_headers = [str(f"10e-{d}") for d in range(noise_levels)]

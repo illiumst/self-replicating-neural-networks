@@ -131,10 +131,10 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
             for j in range(start_log_time, len(weight_matrix_pca)):
                 xdata.append(weight_matrix_pca[j][0])
                 ydata.append(weight_matrix_pca[j][1])
-            zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size).tolist()
+            zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size)
 
             ax.plot3D(xdata, ydata, zdata, label=f"net {i}")
-            ax.scatter(np.array(xdata), np.array(ydata), np.array(zdata), s=7)
+            ax.scatter(np.asarray(xdata), np.asarray(ydata), zdata, s=7)
 
     steps = mpatches.Patch(color="white", label=f"{z_axis_legend}: {len(matrices_weights_history)} steps")
     population_size = mpatches.Patch(color="white", label=f"Population: {population_size} networks")
@@ -181,7 +181,8 @@ def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Pa
         
     z_axis_legend = "epochs"
 
-    return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size, plot_pca_together=plot_pca_together)
+    return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size,
+                   plot_pca_together=plot_pca_together)
 
 
 def plot_3d_self_application(nets_array: List, exp_name: str, directory_name: Union[str, Path], batch_size: int) -> None:
@@ -212,7 +213,7 @@ def plot_3d_soup(nets_list, exp_name, directory: Union[str, Path]):
     # will send forward the number "1" for batch size with the variable <irrelevant_batch_size>.
     irrelevant_batch_size = 1
 
-    plot_3d_self_train(nets_list, exp_name, directory, irrelevant_batch_size)
+    plot_3d_self_train(nets_list, exp_name, directory, irrelevant_batch_size, False)
 
 
 def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_between_SA: int,
