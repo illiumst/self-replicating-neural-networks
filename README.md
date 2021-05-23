@@ -19,7 +19,16 @@
 
 - [ ] Adjust Self Training so that it favors second order fixpoints-> Second order test implementation (?)
 
+- [ ] Barplot over clones -> how many become a fixpoint cs how many diverge per noise level
 
+- [ ] Box-Plot of Avg. Distance of clones from parent
+
+# Future Todos:
+
+- [ ] Find a statistik over weight space that provides a better init function
+- [ ] Test this init function on a mnist classifier - just for the lolz
+- [ ] 
+ 
 ---
 ## Notes: 
 

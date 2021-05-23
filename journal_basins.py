@@ -28,7 +28,7 @@ def mean_invariate_manhattan_distance(x, y):
     # distances of ascending values, ie. sum (abs(min1_X-min1_Y), abs(min2_X-min2Y) ...) / mean.  
     # Idea was to find weight sets that have same values but just in different positions, that would
     # make this distance 0.
-    return np.mean(list(map(l1, zip(sorted(x), sorted(y)))))
+    return np.mean(list(map(l1, zip(sorted(x.numpy()), sorted(y.numpy())))))
 
 
 def distance_matrix(nets, distance="MIM", print_it=True):
@@ -212,19 +212,19 @@ if __name__ == "__main__":
     # Define number of runs & name:
     ST_runs = 1
     ST_runs_name = "test-27"
-    ST_steps = 1700
+    ST_steps = 2500
     ST_epochs = 2
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 5
-    ST_population_size = 1
+    nr_clones = 10
+    ST_population_size = 3
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)
 
     print(f"Running the Spawn experiment:")
-    for noise_factor in range(2,3):
+    for noise_factor in [1]:
         SpawnExperiment(
             population_size=ST_population_size,
             log_step_size=ST_log_step_size,

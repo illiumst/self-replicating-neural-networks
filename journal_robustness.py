@@ -1,7 +1,10 @@
 import pickle
+
+import pandas as pd
 import torch
 import random
 import copy
+import numpy as np
 
 from pathlib import Path
 from tqdm import tqdm
@@ -14,6 +17,8 @@ from functionalities_test import is_identity_function, is_zero_fixpoint, test_fo
 from network import Net
 from torch.nn import functional as F
 from visualization import plot_loss, bar_chart_fixpoints
+import seaborn as sns
+from matplotlib import pyplot as plt
 
 
 def prng():
@@ -31,7 +36,6 @@ class RobustnessComparisonExperiment:
     @staticmethod
     def apply_noise(network, noise: int):
         """ Changing the weights of a network to values + noise """
-
         for layer_id, layer_name in enumerate(network.state_dict()):
             for line_id, line_values in enumerate(network.state_dict()[layer_name]):
                 for weight_id, weight_value in enumerate(network.state_dict()[layer_name][line_id]):
@@ -77,41 +81,48 @@ class RobustnessComparisonExperiment:
     def populate_environment(self):
         loop_population_size = tqdm(range(self.population_size))
         nets = []
+        if self.synthetic:
+            ''' Either use perfect / hand-constructed fixpoint ... '''
+            net_name = f"net_{str(0)}_synthetic"
+            net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
+            net.apply_weights(generate_perfekt_synthetic_fixpoint_weights())
+            nets.append(net)
 
-        for i in loop_population_size:
-            loop_population_size.set_description("Populating experiment %s" % i)
+        else:
+            for i in loop_population_size:
+                loop_population_size.set_description("Populating experiment %s" % i)
 
-            if self.synthetic:
-                ''' Either use perfect / hand-constructed fixpoint ... '''
-                net_name = f"net_{str(i)}_synthetic"
-                net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
-                net.apply_weights(generate_perfekt_synthetic_fixpoint_weights())
-
-            else:
                 ''' .. or use natural approach to train fixpoints from random initialisation. '''
                 net_name = f"net_{str(i)}"
                 net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
                 for _ in range(self.epochs):
                     net.self_train(self.ST_steps, self.log_step_size, self.net_learning_rate)
-            nets.append(net)
+                nets.append(net)
+
         return nets
 
-    def test_robustness(self, print_it=True):
-        avg_time_to_vergence = [[0 for _ in range(10)] for _ in range(len(self.id_functions))]
-        avg_time_as_fixpoint = [[0 for _ in range(10)] for _ in range(len(self.id_functions))]
-        avg_loss_per_application = [[0 for _ in range(10)] for _ in range(len(self.id_functions))]
-        noise_range = range(10)
+    def test_robustness(self, print_it=True, noise_levels=10, seeds=10):
+        assert (len(self.id_functions) == 1 and seeds > 1) or (len(self.id_functions) > 1 and seeds == 1)
+        is_synthetic = True if len(self.id_functions) > 1 and seeds == 1 else False
+        avg_time_to_vergence = [[0 for _ in range(noise_levels)] for _ in
+                                range(seeds if is_synthetic else len(self.id_functions))]
+        avg_time_as_fixpoint = [[0 for _ in range(noise_levels)] for _ in
+                                range(seeds if is_synthetic else len(self.id_functions))]
         row_headers = []
+        data_pos = 0
+        # This checks wether to use synthetic setting with multiple seeds
+        #   or multi network settings with a singlee seed
 
-        for i, fixpoint in enumerate(self.id_functions):
+        df = pd.DataFrame(columns=['seed', 'noise_level', 'application_step', 'absolute_loss'])
+        for i, fixpoint in enumerate(self.id_functions): #1 / n
             row_headers.append(fixpoint.name)
-            loss_per_application = [[0 for _ in range(10)] for _ in range(len(self.id_functions))]
-            for seed in range(10):
-                for noise_level in noise_range:
+            for seed in range(seeds): #n / 1
+                for noise_level in range(noise_levels):
+                    self_application_steps = 1
                     clone = Net(fixpoint.input_size, fixpoint.hidden_size, fixpoint.out_size,
                                 f"{fixpoint.name}_clone_noise10e-{noise_level}")
                     clone.load_state_dict(copy.deepcopy(fixpoint.state_dict()))
-                    rand_noise = prng() * pow(10, -noise_level)
+                    rand_noise = prng() * pow(10, -noise_level) #n / 1
                     clone = self.apply_noise(clone, rand_noise)
 
                     while not is_zero_fixpoint(clone) and not is_divergent(clone):
@@ -128,12 +139,24 @@ class RobustnessComparisonExperiment:
                         clone_weight_post_application = clone.input_weight_matrix()
                         target_data_post_application = clone.create_target_weights(clone_weight_post_application)
 
-                        loss_per_application[seed][noise_level] = (F.l1_loss(target_data_pre_application,
-                                                                             target_data_post_application))
+                        absolute_loss = F.l1_loss(target_data_pre_application, target_data_post_application).item()
 
+                        setting = i if is_synthetic else seed
+
+                        df.loc[data_pos] = [setting, noise_level, self_application_steps, absolute_loss]
+                        data_pos += 1
+                        self_application_steps += 1
+
+        # calculate the average:
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df = df.dropna()
+        # sns.set(rc={'figure.figsize': (10, 50)})
+        bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
+                         col='noise_level', col_wrap=3, showfliers=False)
+        plt.show()
 
         if print_it:
-            col_headers = [str(f"10e-{d}") for d in noise_range]
+            col_headers = [str(f"10e-{d}") for d in range(noise_levels)]
 
             print(f"\nAppplications steps until divergence / zero: ")
             print(tabulate(avg_time_to_vergence, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
