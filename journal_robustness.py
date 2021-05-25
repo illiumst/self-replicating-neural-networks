@@ -95,7 +95,6 @@ class RobustnessComparisonExperiment:
                 for _ in range(self.epochs):
                     net.self_train(self.ST_steps, self.log_step_size, self.net_learning_rate)
                 nets.append(net)
-
         return nets
 
     def test_robustness(self, print_it=True, noise_levels=10, seeds=10):
@@ -110,12 +109,12 @@ class RobustnessComparisonExperiment:
         # This checks wether to use synthetic setting with multiple seeds
         #   or multi network settings with a singlee seed
 
-        df = pd.DataFrame(columns=['seed', 'noise_level', 'application_step', 'absolute_loss'])
+        df = pd.DataFrame(columns=['setting', 'noise_level', 'application_step', 'absolute_loss', 'time_to_vergence'])
         for i, fixpoint in enumerate(self.id_functions): #1 / n
             row_headers.append(fixpoint.name)
             for seed in range(seeds): #n / 1
                 for noise_level in range(noise_levels):
-                    self_application_steps = 1
+                    self_application_steps = 0
                     clone = Net(fixpoint.input_size, fixpoint.hidden_size, fixpoint.out_size,
                                 f"{fixpoint.name}_clone_noise10e-{noise_level}")
                     clone.load_state_dict(copy.deepcopy(fixpoint.state_dict()))
@@ -123,9 +122,6 @@ class RobustnessComparisonExperiment:
                     clone = self.apply_noise(clone, rand_noise)
 
                     while not is_zero_fixpoint(clone) and not is_divergent(clone):
-                        if is_identity_function(clone):
-                            avg_time_as_fixpoint[i][noise_level] += 1
-
                         # -> before
                         clone_weight_pre_application = clone.input_weight_matrix()
                         target_data_pre_application = clone.create_target_weights(clone_weight_pre_application)
@@ -140,16 +136,27 @@ class RobustnessComparisonExperiment:
 
                         setting = i if is_synthetic else seed
 
-                        df.loc[data_pos] = [setting, noise_level, self_application_steps, absolute_loss]
-                        data_pos += 1
-                        self_application_steps += 1
+                        if is_identity_function(clone):
+                            avg_time_as_fixpoint[i][noise_level] += 1
+                            # When this raises a Type Error, we found a second order fixpoint!
+                            self_application_steps += 1
+                        else:
+                            self_application_steps = pd.NA  # Not a Number!
+
+                        df.loc[df.shape[0]] = [setting, noise_level, self_application_steps,
+                                               absolute_loss, avg_time_to_vergence[i][noise_level]]
+
 
         # calculate the average:
-        df = df.replace([np.inf, -np.inf], np.nan)
-        df = df.dropna()
+        # df = df.replace([np.inf, -np.inf], np.nan)
+        # df = df.dropna()
+        bf = sns.boxplot(data=df, y='self_application_steps', x='noise_level', )
+        bf.set_title('Robustness as self application steps per noise level')
+        plt.tight_layout()
+
         # sns.set(rc={'figure.figsize': (10, 50)})
-        bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
-                         col='noise_level', col_wrap=3, showfliers=False)
+        # bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
+        #                  col='noise_level', col_wrap=3, showfliers=False)
         directory = Path('output') / 'robustness'
         filename = f"absolute_loss_perapplication_boxplot_grid.png"
         filepath = directory / filename
@@ -167,20 +174,17 @@ class RobustnessComparisonExperiment:
 
         return avg_time_as_fixpoint, avg_time_to_vergence
 
-
     def count_fixpoints(self):
         exp_details = f"ST steps: {self.ST_steps}"
         self.id_functions = test_for_fixpoints(self.fixpoint_counters, self.nets)
         bar_chart_fixpoints(self.fixpoint_counters, self.population_size, self.directory, self.net_learning_rate,
                             exp_details)
 
-
     def visualize_loss(self):
         for i in range(len(self.nets)):
             net_loss_history = self.nets[i].loss_history
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
-
 
     def save(self):
         pickle.dump(self, open(f"{self.directory}/experiment_pickle.p", "wb"))
@@ -211,5 +215,5 @@ if __name__ == "__main__":
         epochs=ST_epochs,
         st_steps=ST_steps,
         synthetic=ST_synthetic,
-        directory=Path('output') / 'robustness' / f'{ST_name_hash}'
+        directory=Path('output') / 'journal_robustness' / f'{ST_name_hash}'
     )

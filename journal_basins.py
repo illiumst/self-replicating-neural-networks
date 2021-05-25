@@ -173,6 +173,7 @@ class SpawnExperiment:
                     # and add to nets for plotting if they are fixpoints themselves;
                     for _ in range(self.epochs - 1):
                         for _ in range(self.ST_steps):
+                            # soup Evolve
                             clone.self_train(1, self.log_step_size, self.net_learning_rate)
                     if is_identity_function(clone):
                         input_data = clone.input_weight_matrix()
@@ -212,19 +213,19 @@ if __name__ == "__main__":
     # Define number of runs & name:
     ST_runs = 1
     ST_runs_name = "test-27"
-    ST_steps = 2500
+    ST_steps = 2000
     ST_epochs = 2
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 10
-    ST_population_size = 3
+    nr_clones = 50
+    ST_population_size = 1
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)
 
     print(f"Running the Spawn experiment:")
-    for noise_factor in [1]:
+    for noise_factor in [9]:
         SpawnExperiment(
             population_size=ST_population_size,
             log_step_size=ST_log_step_size,
