@@ -195,7 +195,6 @@ class RobustnessComparisonExperiment:
 
             print(f"\nTime as fixpoint: ")
             # print(tabulate(time_as_fixpoint, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
-
         return time_as_fixpoint, time_to_vergence
 
     def count_fixpoints(self):

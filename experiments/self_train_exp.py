@@ -55,8 +55,6 @@ class SelfTrainExperiment:
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
 
             for _ in range(self.epochs):
-              input_data = net.input_weight_matrix()
-              target_data = net.create_target_weights(input_data)
               net.self_train(1, self.log_step_size, self.net_learning_rate)
 
             print(f"\nLast weight matrix (epoch: {self.epochs}):\n{net.input_weight_matrix()}\nLossHistory: {net.loss_history[-10:]}")
@@ -112,6 +110,7 @@ def run_ST_experiment(population_size, batch_size, net_input_size, net_hidden_si
     summary_pre_title = "ST"
     summary_fixpoint_experiment(runs, population_size, epochs, experiments, net_learning_rate, summary_directory_name,
                                 summary_pre_title)
+
 
 if __name__ == '__main__':
     raise NotImplementedError('Test this here!!!')
