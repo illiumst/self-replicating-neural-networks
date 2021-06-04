@@ -6,9 +6,9 @@ from torch import mean
 from tqdm import tqdm
 import random
 import copy
-from functionalities_test import is_identity_function, test_status
+from functionalities_test import is_identity_function, test_status, test_for_fixpoints
 from network import Net
-from visualization import plot_3d_self_train, plot_loss
+from visualization import plot_3d_self_train, plot_loss, plot_3d_soup
 import numpy as np
 from tabulate import tabulate
 from sklearn.metrics import mean_absolute_error as MAE
@@ -17,18 +17,19 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
+
 def prng():
     return random.random()
 
 
 def l1(tup):
     a, b = tup
-    return abs(a-b)
+    return abs(a - b)
 
 
 def mean_invariate_manhattan_distance(x, y):
-    # One of these one-liners that might be smart or really dumb. Goal is to find pairwise 
-    # distances of ascending values, ie. sum (abs(min1_X-min1_Y), abs(min2_X-min2Y) ...) / mean.  
+    # One of these one-liners that might be smart or really dumb. Goal is to find pairwise
+    # distances of ascending values, ie. sum (abs(min1_X-min1_Y), abs(min2_X-min2Y) ...) / mean.
     # Idea was to find weight sets that have same values but just in different positions, that would
     # make this distance 0.
     return np.mean(list(map(l1, zip(sorted(x.numpy()), sorted(y.numpy())))))
@@ -65,13 +66,14 @@ def distance_from_parent(nets, distance="MIM", print_it=True):
 
         for dist in distance_range:
             for idx, clone in enumerate(clones):
-                clone_weights = clone.create_target_weights(clone.input_weight_matrix()) 
+                clone_weights = clone.create_target_weights(clone.input_weight_matrix())
                 if distance in ["MSE"]:
                     matrix[idx][dist] = MSE(parent_weights, clone_weights) < pow(10, -dist)
                 elif distance in ["MAE"]:
                     matrix[idx][dist] = MAE(parent_weights, clone_weights) < pow(10, -dist)
                 elif distance in ["MIM"]:
-                    matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10, -dist)
+                    matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10,
+                                                                                                               -dist)
 
         if print_it:
             print(f"\nDistances from parent {parent.name} [{distance}]:")
@@ -80,10 +82,11 @@ def distance_from_parent(nets, distance="MIM", print_it=True):
             print(tabulate(matrix, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
 
         list_of_matrices.append(matrix)
-    
+
     return list_of_matrices
 
-class SpawnExperiment:
+
+class SoupSpawnExperiment:
 
     @staticmethod
     def apply_noise(network, noise: int):
@@ -92,16 +95,16 @@ class SpawnExperiment:
         for layer_id, layer_name in enumerate(network.state_dict()):
             for line_id, line_values in enumerate(network.state_dict()[layer_name]):
                 for weight_id, weight_value in enumerate(network.state_dict()[layer_name][line_id]):
-                    #network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
+                    # network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
                     if prng() < 0.5:
                         network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
                     else:
                         network.state_dict()[layer_name][line_id][weight_id] = weight_value - noise
-                    
+
         return network
 
     def __init__(self, population_size, log_step_size, net_input_size, net_hidden_size, net_out_size, net_learning_rate,
-                 epochs, st_steps, nr_clones, noise, directory) -> None:
+                 epochs, st_steps, attack_chance, nr_clones, noise, directory) -> None:
         self.population_size = population_size
         self.log_step_size = log_step_size
         self.net_input_size = net_input_size
@@ -110,8 +113,8 @@ class SpawnExperiment:
         self.net_learning_rate = net_learning_rate
         self.epochs = epochs
         self.ST_steps = st_steps
+        self.attack_chance = attack_chance
         self.loss_history = []
-        self.nets = []
         self.nr_clones = nr_clones
         self.noise = noise or 10e-5
         print("\nNOISE:", self.noise)
@@ -119,7 +122,11 @@ class SpawnExperiment:
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
 
+        # Populating environment & evolving entities
+        self.nets = []
         self.populate_environment()
+        self.evolve()
+
         self.spawn_and_continue()
         self.weights_evolution_3d_experiment()
         # self.visualize_loss()
@@ -133,29 +140,48 @@ class SpawnExperiment:
         for i in loop_population_size:
             loop_population_size.set_description("Populating experiment %s" % i)
 
-            net_name = f"ST_net_{str(i)}"
+            net_name = f"soup_net_{str(i)}"
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
 
-            for _ in range(self.ST_steps):
-                net.self_train(1, self.log_step_size, self.net_learning_rate)
-
             self.nets.append(net)
+
+    def evolve(self):
+        loop_epochs = tqdm(range(self.epochs))
+        for i in loop_epochs:
+            loop_epochs.set_description("Evolving soup %s" % i)
+
+            # A network attacking another network with a given percentage
+            if random.randint(1, 100) <= self.attack_chance:
+                random_net1, random_net2 = random.sample(range(self.population_size), 2)
+                random_net1 = self.nets[random_net1]
+                random_net2 = self.nets[random_net2]
+                print(f"\n Attack: {random_net1.name} -> {random_net2.name}")
+                random_net1.attack(random_net2)
+
+            #  Self-training each network in the population
+            for j in range(self.population_size):
+                net = self.nets[j]
+
+                for _ in range(self.ST_steps):
+                    net.self_train(1, self.log_step_size, self.net_learning_rate)
 
     def spawn_and_continue(self, number_clones: int = None):
         number_clones = number_clones or self.nr_clones
 
-        df = pd.DataFrame(columns=['parent', 'MAE_pre','MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise', 'status_post'])
+        df = pd.DataFrame(
+            columns=['parent', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
+                     'status_post'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
         for i in range(self.population_size):
             net = self.nets[i]
             # We set parent start_time to just before this epoch ended, so plotting is zoomed in. Comment out to
-            # to see full trajectory (but the clones will be very hard to see). 
+            # to see full trajectory (but the clones will be very hard to see).
             # Make one target to compare distances to clones later when they have trained.
             net.start_time = self.ST_steps - 150
             net_input_data = net.input_weight_matrix()
             net_target_data = net.create_target_weights(net_input_data)
-            
+
             if is_identity_function(net):
                 print(f"\nNet {i} is fixpoint")
 
@@ -171,7 +197,7 @@ class SpawnExperiment:
                     clone = self.apply_noise(clone, rand_noise)
                     clone.s_train_weights_history = copy.deepcopy(net.s_train_weights_history)
                     clone.number_trained = copy.deepcopy(net.number_trained)
-                    
+
                     # Pre Training distances (after noise application of course)
                     clone_pre_weights = clone.create_target_weights(clone.input_weight_matrix())
                     MAE_pre = MAE(net_target_data, clone_pre_weights)
@@ -182,7 +208,7 @@ class SpawnExperiment:
                     for _ in range(self.epochs - 1):
                         for _ in range(self.ST_steps):
                             clone.self_train(1, self.log_step_size, self.net_learning_rate)
-                    
+
                     # Post Training distances for comparison
                     clone_post_weights = clone.create_target_weights(clone.input_weight_matrix())
                     MAE_post = MAE(net_target_data, clone_post_weights)
@@ -192,29 +218,30 @@ class SpawnExperiment:
                     # .. log to data-frame and add to nets for 3d plotting if they are fixpoints themselves.
                     test_status(clone)
                     if is_identity_function(clone):
-                        print(f"Clone {j} (of net_{i}) is fixpoint." 
+                        print(f"Clone {j} (of net_{i}) is fixpoint."
                               f"\nMSE({i},{j}): {MSE_post}"
                               f"\nMAE({i},{j}): {MAE_post}"
                               f"\nMIM({i},{j}): {MIM_post}\n")
                         self.nets.append(clone)
 
-                    df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise, clone.is_fixpoint]
+                    df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise,
+                                          clone.is_fixpoint]
 
                 # Finally take parent net {i} and finish it's training for comparison to clone development.
                 for _ in range(self.epochs - 1):
                     for _ in range(self.ST_steps):
                         net.self_train(1, self.log_step_size, self.net_learning_rate)
                 net_weights_after = net.create_target_weights(net.input_weight_matrix())
-                print(f"Parent net's distance to original position." 
-                              f"\nMSE(OG,new): {MAE(net_target_data, net_weights_after)}"
-                              f"\nMAE(OG,new): {MSE(net_target_data, net_weights_after)}"
-                              f"\nMIM(OG,new): {mean_invariate_manhattan_distance(net_target_data, net_weights_after)}\n")
+                print(f"Parent net's distance to original position."
+                      f"\nMSE(OG,new): {MAE(net_target_data, net_weights_after)}"
+                      f"\nMAE(OG,new): {MSE(net_target_data, net_weights_after)}"
+                      f"\nMIM(OG,new): {mean_invariate_manhattan_distance(net_target_data, net_weights_after)}\n")
 
         self.df = df
 
     def weights_evolution_3d_experiment(self):
-        exp_name = f"ST_{str(len(self.nets))}_nets_3d_weights_PCA"
-        return plot_3d_self_train(self.nets, exp_name, self.directory, self.log_step_size, plot_pca_together=True)
+        exp_name = f"soup_basins_{str(len(self.nets))}_nets_3d_weights_PCA"
+        return plot_3d_soup(self.nets, exp_name, self.directory)
 
     def visualize_loss(self):
         for i in range(len(self.nets)):
@@ -222,10 +249,10 @@ class SpawnExperiment:
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
 
-
     def save(self):
         pickle.dump(self, open(f"{self.directory}/experiment_pickle.p", "wb"))
         print(f"\nSaved experiment to {self.directory}.")
+
 
 if __name__ == "__main__":
 
@@ -235,41 +262,43 @@ if __name__ == "__main__":
     # Define number of runs & name:
     ST_runs = 1
     ST_runs_name = "test-27"
-    ST_steps = 2500
-    ST_epochs = 2
-    ST_log_step_size = 10
+    soup_ST_steps = 2500
+    soup_epochs = 2
+    soup_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 5
-    ST_population_size = 1
-    ST_net_hidden_size = 2
-    ST_net_learning_rate = 0.04
-    ST_name_hash = random.getrandbits(32)
+    nr_clones = 15
+    soup_population_size = 2
+    soup_net_hidden_size = 2
+    soup_net_learning_rate = 0.04
+    soup_attack_chance = 10
+    soup_name_hash = random.getrandbits(32)
 
-    print(f"Running the Spawn experiment:")
+    print(f"Running the Soup-Spawn experiment:")
     exp_list = []
-    for noise_factor in range(2,5):
-        exp = SpawnExperiment(
-            population_size=ST_population_size,
-            log_step_size=ST_log_step_size,
+    for noise_factor in range(2, 5):
+        exp = SoupSpawnExperiment(
+            population_size=soup_population_size,
+            log_step_size=soup_log_step_size,
             net_input_size=NET_INPUT_SIZE,
-            net_hidden_size=ST_net_hidden_size,
+            net_hidden_size=soup_net_hidden_size,
             net_out_size=NET_OUT_SIZE,
-            net_learning_rate=ST_net_learning_rate,
-            epochs=ST_epochs,
-            st_steps=ST_steps,
+            net_learning_rate=soup_net_learning_rate,
+            epochs=soup_epochs,
+            st_steps=soup_ST_steps,
+            attack_chance=soup_attack_chance,
             nr_clones=nr_clones,
             noise=pow(10, -noise_factor),
-            directory=Path('output') / 'spawn_basin' / f'{ST_name_hash}' / f'10e-{noise_factor}'
+            directory=Path('output') / 'soup_spawn_basin' / f'{soup_name_hash}' / f'10e-{noise_factor}'
         )
         exp_list.append(exp)
 
     # Boxplot with counts of nr_fixpoints, nr_other, nr_etc. on y-axis
     df = pd.concat([exp.df for exp in exp_list])
     sns.countplot(data=df, x="noise", hue="status_post")
-    plt.savefig(f"output/spawn_basin/{ST_name_hash}/fixpoint_status_countplot.png")
+    plt.savefig(f"output/soup_spawn_basin/{soup_name_hash}/fixpoint_status_countplot.png")
 
     # Catplot (either kind="point" or "box") that shows before-after training distances to parent
     mlt = df[["MIM_pre", "MIM_post", "noise"]].melt("noise", var_name="time", value_name='Average Distance')
     sns.catplot(data=mlt, x="time", y="Average Distance", col="noise", kind="point", col_wrap=5, sharey=False)
-    plt.savefig(f"output/spawn_basin/{ST_name_hash}/clone_distance_catplot.png")
+    plt.savefig(f"output/soup_spawn_basin/{soup_name_hash}/clone_distance_catplot.png")

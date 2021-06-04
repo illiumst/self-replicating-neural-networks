@@ -78,3 +78,18 @@ def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
 
 def changing_rate(x_new, x_old):
     return x_new - x_old
+
+def test_status(net: Net) -> Net:
+
+    if is_divergent(net):
+        net.is_fixpoint = "divergent"
+    elif is_identity_function(net):  # is default value
+        net.is_fixpoint = "identity_func"
+    elif is_zero_fixpoint(net):
+        net.is_fixpoint = "fix_zero"
+    elif is_secondary_fixpoint(net):
+        net.is_fixpoint = "fix_sec"
+    else:
+        net.is_fixpoint = "other_func"
+
+    return net
