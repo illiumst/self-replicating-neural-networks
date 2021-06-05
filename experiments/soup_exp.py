@@ -88,8 +88,7 @@ class SoupExperiment:
             # Testing for fixpoints after each batch of ST steps to see relevant data
             if i % self.ST_steps == 0:
                 test_for_fixpoints(self.fixpoint_counters, self.population)
-                fixpoints_percentage = round((self.fixpoint_counters["fix_zero"] + self.fixpoint_counters["fix_weak"] +
-                                              self.fixpoint_counters["fix_sec"]) / self.population_size, 1)
+                fixpoints_percentage = round(self.fixpoint_counters["identity_func"] / self.population_size, 1)
                 self.fixpoint_counters_history.append(fixpoints_percentage)
 
             # Resetting the fixpoint counter. Last iteration not to be reset -

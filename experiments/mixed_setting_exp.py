@@ -95,7 +95,7 @@ class MixedSettingExperiment:
         # and only they need the batch size. To not affect the number of epochs shown in the 3D plot, will send
         # forward the number "1" for batch size with the variable <irrelevant_batch_size>
         irrelevant_batch_size = 1
-        plot_3d_self_train(self.nets, exp_name, self.directory_name, irrelevant_batch_size)
+        plot_3d_self_train(self.nets, exp_name, self.directory_name, irrelevant_batch_size, True)
 
     def count_fixpoints(self):
         exp_details = f"SA steps: {self.SA_steps}; ST steps: {self.ST_steps_between_SA}"

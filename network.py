@@ -48,7 +48,10 @@ class Net(nn.Module):
     def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
         super().__init__()
         self.start_time = start_time
+
         self.name = name
+        self.children = []
+
         self.input_size = i_size
         self.hidden_size = h_size
         self.out_size = o_size

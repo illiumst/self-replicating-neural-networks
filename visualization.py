@@ -73,7 +73,7 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory:
 
 
 def plot_3d(matrices_weights_history, directory: Union[str, Path], population_size, z_axis_legend,
-            exp_name="experiment", is_trained="", batch_size=1, plot_pca_together=False):
+            exp_name="experiment", is_trained="", batch_size=1, plot_pca_together=False, nets_array=None):
     """ Plotting the the weights of the nets in a 3d form using principal component analysis (PCA) """
 
     fig = plt.figure()
@@ -134,7 +134,10 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
             zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size)
 
             ax.plot3D(xdata, ydata, zdata, label=f"net {i}")
-            ax.scatter(np.asarray(xdata), np.asarray(ydata), zdata, s=7)
+            if "parent" in nets_array[i].name:
+                ax.scatter(np.asarray(xdata), np.asarray(ydata), zdata, s=3, c="b")
+            else:
+                ax.scatter(np.asarray(xdata), np.asarray(ydata), zdata, s=3)
 
     steps = mpatches.Patch(color="white", label=f"{z_axis_legend}: {len(matrices_weights_history)} steps")
     population_size = mpatches.Patch(color="white", label=f"Population: {population_size} networks")
@@ -165,7 +168,7 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
     else:
         plt.savefig(str(filepath))
 
-    plt.show()
+    # plt.show()
 
 
 def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Path], batch_size: int, plot_pca_together: bool):
@@ -177,12 +180,12 @@ def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Pa
     for i in loop_nets_array:
         loop_nets_array.set_description("Creating ST weights history %s" % i)
 
-        matrices_weights_history.append( (nets_array[i].s_train_weights_history, nets_array[i].start_time) )
+        matrices_weights_history.append((nets_array[i].s_train_weights_history, nets_array[i].start_time))
         
     z_axis_legend = "epochs"
 
     return plot_3d(matrices_weights_history, directory, len(nets_array), z_axis_legend, exp_name, "", batch_size,
-                   plot_pca_together=plot_pca_together)
+                   plot_pca_together=plot_pca_together, nets_array=nets_array)
 
 
 def plot_3d_self_application(nets_array: List, exp_name: str, directory_name: Union[str, Path], batch_size: int) -> None:

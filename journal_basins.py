@@ -17,13 +17,14 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
+
 def prng():
     return random.random()
 
 
 def l1(tup):
     a, b = tup
-    return abs(a-b)
+    return abs(a - b)
 
 
 def mean_invariate_manhattan_distance(x, y):
@@ -65,13 +66,14 @@ def distance_from_parent(nets, distance="MIM", print_it=True):
 
         for dist in distance_range:
             for idx, clone in enumerate(clones):
-                clone_weights = clone.create_target_weights(clone.input_weight_matrix()) 
+                clone_weights = clone.create_target_weights(clone.input_weight_matrix())
                 if distance in ["MSE"]:
                     matrix[idx][dist] = MSE(parent_weights, clone_weights) < pow(10, -dist)
                 elif distance in ["MAE"]:
                     matrix[idx][dist] = MAE(parent_weights, clone_weights) < pow(10, -dist)
                 elif distance in ["MIM"]:
-                    matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10, -dist)
+                    matrix[idx][dist] = mean_invariate_manhattan_distance(parent_weights, clone_weights) < pow(10,
+                                                                                                               -dist)
 
         if print_it:
             print(f"\nDistances from parent {parent.name} [{distance}]:")
@@ -80,8 +82,9 @@ def distance_from_parent(nets, distance="MIM", print_it=True):
             print(tabulate(matrix, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
 
         list_of_matrices.append(matrix)
-    
+
     return list_of_matrices
+
 
 class SpawnExperiment:
 
@@ -92,12 +95,12 @@ class SpawnExperiment:
         for layer_id, layer_name in enumerate(network.state_dict()):
             for line_id, line_values in enumerate(network.state_dict()[layer_name]):
                 for weight_id, weight_value in enumerate(network.state_dict()[layer_name][line_id]):
-                    #network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
+                    # network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
                     if prng() < 0.5:
                         network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
                     else:
                         network.state_dict()[layer_name][line_id][weight_id] = weight_value - noise
-                    
+
         return network
 
     def __init__(self, population_size, log_step_size, net_input_size, net_hidden_size, net_out_size, net_learning_rate,
@@ -144,7 +147,9 @@ class SpawnExperiment:
     def spawn_and_continue(self, number_clones: int = None):
         number_clones = number_clones or self.nr_clones
 
-        df = pd.DataFrame(columns=['parent', 'MAE_pre','MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise', 'status_post'])
+        df = pd.DataFrame(
+            columns=['parent', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
+                     'status_post'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
         for i in range(self.population_size):
@@ -155,7 +160,7 @@ class SpawnExperiment:
             net.start_time = self.ST_steps - 150
             net_input_data = net.input_weight_matrix()
             net_target_data = net.create_target_weights(net_input_data)
-            
+
             if is_identity_function(net):
                 print(f"\nNet {i} is fixpoint")
 
@@ -171,7 +176,7 @@ class SpawnExperiment:
                     clone = self.apply_noise(clone, rand_noise)
                     clone.s_train_weights_history = copy.deepcopy(net.s_train_weights_history)
                     clone.number_trained = copy.deepcopy(net.number_trained)
-                    
+
                     # Pre Training distances (after noise application of course)
                     clone_pre_weights = clone.create_target_weights(clone.input_weight_matrix())
                     MAE_pre = MAE(net_target_data, clone_pre_weights)
@@ -182,7 +187,7 @@ class SpawnExperiment:
                     for _ in range(self.epochs - 1):
                         for _ in range(self.ST_steps):
                             clone.self_train(1, self.log_step_size, self.net_learning_rate)
-                    
+
                     # Post Training distances for comparison
                     clone_post_weights = clone.create_target_weights(clone.input_weight_matrix())
                     MAE_post = MAE(net_target_data, clone_post_weights)
@@ -192,23 +197,24 @@ class SpawnExperiment:
                     # .. log to data-frame and add to nets for 3d plotting if they are fixpoints themselves.
                     test_status(clone)
                     if is_identity_function(clone):
-                        print(f"Clone {j} (of net_{i}) is fixpoint." 
+                        print(f"Clone {j} (of net_{i}) is fixpoint."
                               f"\nMSE({i},{j}): {MSE_post}"
                               f"\nMAE({i},{j}): {MAE_post}"
                               f"\nMIM({i},{j}): {MIM_post}\n")
                         self.nets.append(clone)
 
-                    df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise, clone.is_fixpoint]
+                    df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise,
+                                          clone.is_fixpoint]
 
                 # Finally take parent net {i} and finish it's training for comparison to clone development.
                 for _ in range(self.epochs - 1):
                     for _ in range(self.ST_steps):
                         net.self_train(1, self.log_step_size, self.net_learning_rate)
                 net_weights_after = net.create_target_weights(net.input_weight_matrix())
-                print(f"Parent net's distance to original position." 
-                              f"\nMSE(OG,new): {MAE(net_target_data, net_weights_after)}"
-                              f"\nMAE(OG,new): {MSE(net_target_data, net_weights_after)}"
-                              f"\nMIM(OG,new): {mean_invariate_manhattan_distance(net_target_data, net_weights_after)}\n")
+                print(f"Parent net's distance to original position."
+                      f"\nMSE(OG,new): {MAE(net_target_data, net_weights_after)}"
+                      f"\nMAE(OG,new): {MSE(net_target_data, net_weights_after)}"
+                      f"\nMIM(OG,new): {mean_invariate_manhattan_distance(net_target_data, net_weights_after)}\n")
 
         self.df = df
 
@@ -222,10 +228,10 @@ class SpawnExperiment:
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
 
-
     def save(self):
         pickle.dump(self, open(f"{self.directory}/experiment_pickle.p", "wb"))
         print(f"\nSaved experiment to {self.directory}.")
+
 
 if __name__ == "__main__":
 
@@ -248,7 +254,7 @@ if __name__ == "__main__":
 
     print(f"Running the Spawn experiment:")
     exp_list = []
-    for noise_factor in range(2,5):
+    for noise_factor in range(2, 5):
         exp = SpawnExperiment(
             population_size=ST_population_size,
             log_step_size=ST_log_step_size,
