@@ -1,6 +1,11 @@
 # self-rep NN paper - ALIFE journal edition
 
-- [x] Plateau / Pillar sizeWhat does happen to the fixpoints after noise introduction and retraining?Options beeing: Same Fixpoint, Similar Fixpoint (Basin), Different Fixpoint? Do they do the clustering thingy?
+- [x] Plateau / Pillar sizeWhat does happen to the fixpoints after noise introduction and retraining?Options beeing: Same Fixpoint, Similar Fixpoint (Basin), 
+    - Different Fixpoint?
+      Yes, we did not found same (10-5)
+    - Do they do the clustering thingy?
+      Kind of: Small movement towards (MIM-Distance getting smaller) parent fixpoint.
+      Small movement for everyone? -> Distribution
 
     - see `journal_basins.py` for the "train -> spawn with noise -> train again and see where they end up" functionality. Apply noise follows the `vary` function that was used in the paper robustness test with `+- prng() * eps`. Change if desired.
 
@@ -8,6 +13,9 @@
 
 
 - [ ] Same Thing with Soup interactionWe would expect the same behaviour...Influence of interaction with near and far away particles.
+
+- [ ] How are basins / "attractor areas" shaped?
+      - Weired.... tbc...
 
 - [x] Robustness test with a trained NetworkTraining for high quality fixpoints, compare with the "perfect" fixpoint. Average Loss per application step
     
@@ -19,7 +27,7 @@
 
 - [ ] Adjust Self Training so that it favors second order fixpoints-> Second order test implementation (?)
 
-- [ ] Barplot over clones -> how many become a fixpoint cs how many diverge per noise level
+- [x] Barplot over clones -> how many become a fixpoint cs how many diverge per noise level
 
 - [ ] Box-Plot of Avg. Distance of clones from parent
 
