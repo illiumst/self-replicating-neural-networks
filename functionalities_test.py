@@ -79,6 +79,7 @@ def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
 def changing_rate(x_new, x_old):
     return x_new - x_old
 
+
 def test_status(net: Net) -> Net:
 
     if is_divergent(net):

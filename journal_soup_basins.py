@@ -6,7 +6,7 @@ from torch import mean
 from tqdm import tqdm
 import random
 import copy
-from functionalities_test import is_identity_function, test_status, test_for_fixpoints
+from functionalities_test import is_identity_function, test_status, test_for_fixpoints, is_zero_fixpoint, is_divergent, is_secondary_fixpoint
 from network import Net
 from visualization import plot_3d_self_train, plot_loss, plot_3d_soup
 import numpy as np
@@ -123,17 +123,22 @@ class SoupSpawnExperiment:
         self.directory.mkdir(parents=True, exist_ok=True)
 
         # Populating environment & evolving entities
-        self.nets = []
-        self.id_functions = []
-        self.clone_soup = []
+        self.parents = []
+        self.clones = []
+        self.parents_with_clones = []
+        self.parents_clones_id_functions = []
+
         self.populate_environment()
 
         self.spawn_and_continue()
-        self.weights_evolution_3d_experiment(self.nets, "parents")
-        self.weights_evolution_3d_experiment(self.clone_soup, "clones")
+        self.weights_evolution_3d_experiment(self.parents, "only_parents")
+        self.weights_evolution_3d_experiment(self.clones, "only_clones")
+        self.weights_evolution_3d_experiment(self.parents_with_clones, "parents_with_clones")
+        self.weights_evolution_3d_experiment(self.parents_clones_id_functions, "id_f_with_parents")
+
         # self.visualize_loss()
-        self.distance_matrix = distance_matrix(self.nets, print_it=False)
-        self.parent_clone_distances = distance_from_parent(self.nets, print_it=False)
+        self.distance_matrix = distance_matrix(self.parents_clones_id_functions, print_it=False)
+        self.parent_clone_distances = distance_from_parent(self.parents_clones_id_functions, print_it=False)
 
         self.save()
 
@@ -148,10 +153,21 @@ class SoupSpawnExperiment:
             for _ in range(self.ST_steps):
                 net.self_train(1, self.log_step_size, self.net_learning_rate)
 
-            self.nets.append(net)
+            self.parents.append(net)
+            self.parents_with_clones.append(net)
 
             if is_identity_function(net):
-                self.id_functions.append(net)
+                self.parents_clones_id_functions.append(net)
+                print(f"\nNet {net.name} is identity function")
+
+            if is_divergent(net):
+                print(f"\nNet {net.name} is divergent")
+
+            if is_zero_fixpoint(net):
+                print(f"\nNet {net.name} is zero fixpoint")
+
+            if is_secondary_fixpoint(net):
+                print(f"\nNet {net.name} is secondary fixpoint")
 
     def evolve(self, population):
         print(f"Clone soup has a population of {len(population)} networks")
@@ -185,8 +201,8 @@ class SoupSpawnExperiment:
         # MAE_pre, MSE_pre, MIM_pre = 0, 0, 0
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
-        for i in range(len(self.id_functions)):
-            net = self.nets[i]
+        for i in range(len(self.parents)):
+            net = self.parents[i]
             # We set parent start_time to just before this epoch ended, so plotting is zoomed in. Comment out to
             # to see full trajectory (but the clones will be very hard to see).
             # Make one target to compare distances to clones later when they have trained.
@@ -194,7 +210,7 @@ class SoupSpawnExperiment:
             net_input_data = net.input_weight_matrix()
             net_target_data = net.create_target_weights(net_input_data)
 
-            print(f"\nNet {i} is fixpoint")
+            # print(f"\nNet {i} is fixpoint")
 
             # Clone the fixpoint x times and add (+-)self.noise to weight-sets randomly;
             # To plot clones starting after first epoch (z=ST_steps), set that as start_time!
@@ -216,12 +232,15 @@ class SoupSpawnExperiment:
                 MIM_pre = mean_invariate_manhattan_distance(net_target_data, clone_pre_weights)
 
                 net.children.append(clone)
-                self.clone_soup.append(clone)
+                self.clones.append(clone)
+                self.parents_with_clones.append(clone)
 
-        self.evolve(self.clone_soup)
+        self.evolve(self.clones)
+        # evolve also with the parents together
+        # self.evolve(self.parents_with_clones)
 
-        for i in range(len(self.id_functions)):
-            net = self.nets[i]
+        for i in range(len(self.parents)):
+            net = self.parents[i]
             net_input_data = net.input_weight_matrix()
             net_target_data = net.create_target_weights(net_input_data)
 
@@ -234,14 +253,14 @@ class SoupSpawnExperiment:
                 MSE_post = MSE(net_target_data, clone_post_weights)
                 MIM_post = mean_invariate_manhattan_distance(net_target_data, clone_post_weights)
 
-            # .. log to data-frame and add to nets for 3d plotting if they are fixpoints themselves.
+                # .. log to data-frame and add to nets for 3d plotting if they are fixpoints themselves.
                 test_status(clone)
                 if is_identity_function(clone):
                     print(f"Clone {j} (of net_{i}) is fixpoint."
                           f"\nMSE({i},{j}): {MSE_post}"
                           f"\nMAE({i},{j}): {MAE_post}"
                           f"\nMIM({i},{j}): {MIM_post}\n")
-                    self.nets.append(clone)
+                    self.parents_clones_id_functions.append(clone)
 
                 df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise,
                                       clone.is_fixpoint]
@@ -259,12 +278,12 @@ class SoupSpawnExperiment:
         self.df = df
 
     def weights_evolution_3d_experiment(self, nets_population, suffix):
-        exp_name = f"soup_basins_{str(len(self.nets))}_nets_3d_weights_PCA_{suffix}"
+        exp_name = f"soup_basins_{str(len(nets_population))}_nets_3d_weights_PCA_{suffix}"
         return plot_3d_soup(nets_population, exp_name, self.directory)
 
     def visualize_loss(self):
-        for i in range(len(self.nets)):
-            net_loss_history = self.nets[i].loss_history
+        for i in range(len(self.parents)):
+            net_loss_history = self.parents[i].loss_history
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
 
@@ -286,7 +305,7 @@ if __name__ == "__main__":
     soup_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 2
+    nr_clones = 3
     soup_population_size = 2
     soup_net_hidden_size = 2
     soup_net_learning_rate = 0.04

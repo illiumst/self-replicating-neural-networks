@@ -133,7 +133,7 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
                 ydata.append(weight_matrix_pca[j][1])
             zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size)
 
-            ax.plot3D(xdata, ydata, zdata, label=f"net {i}")
+            ax.plot3D(xdata, ydata, zdata, label=f"net {i}", c="b")
             if "parent" in nets_array[i].name:
                 ax.scatter(np.asarray(xdata), np.asarray(ydata), zdata, s=3, c="b")
             else:
