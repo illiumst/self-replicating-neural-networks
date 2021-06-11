@@ -12,31 +12,36 @@
     - there is also a distance matrix for all-to-all particle comparisons (with distance parameter one of: `MSE`, `MAE` (mean absolute error = mean manhattan) and `MIM` (mean position invariant manhattan))
 
 
-- [ ] Same Thing with Soup interactionWe would expect the same behaviour...Influence of interaction with near and far away particles.
-
-- [ ] How are basins / "attractor areas" shaped?
-      - Weired.... tbc...
-
+- [ ] Same Thing with Soup interaction. We would expect the same behaviour...Influence of interaction with near and far away particles.
+      - 
+      - 
+  
 - [x] Robustness test with a trained NetworkTraining for high quality fixpoints, compare with the "perfect" fixpoint. Average Loss per application step
-    
+
     - see `journal_robustness.py` for robustness test modeled after cristians robustness-exp (with the exeption that we put noise on the weights). Has `synthetic` bool to switch to hand-modeled perfect fixpoint instead of naturally trained ones. 
 
     - Also added two difference between the "time-as-fixpoint" and "time-to-verge" (i.e. to divergence / zero).
 
     - We might need to consult about the "average loss per application step", as I think application loss get gradually higher the worse the weights get. So the average might not tell us much here.
 
-- [ ] Adjust Self Training so that it favors second order fixpoints-> Second order test implementation (?)
+- [x] Adjust Self Training so that it favors second order fixpoints-> Second order test implementation (?)
 
 - [x] Barplot over clones -> how many become a fixpoint cs how many diverge per noise level
 
-- [ ] Box-Plot of Avg. Distance of clones from parent
+- [x] Box-Plot of Avg. Distance of clones from parent
+
+- [ ] Search subspace between two fixpoints by linage(10**-5), check were they end up
+
+- [ ] How are basins / "attractor areas" shaped?
+      - Weired.... tbc...
+      - 
+
 
 # Future Todos:
 
 - [ ] Find a statistik over weight space that provides a better init function
 - [ ] Test this init function on a mnist classifier - just for the lolz
-- [ ] 
- 
+
 ---
 ## Notes: 
 

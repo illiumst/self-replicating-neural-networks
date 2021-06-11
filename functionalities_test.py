@@ -24,9 +24,11 @@ def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
                        rtol=0, atol=epsilon)
 
 
-def is_zero_fixpoint(network: Net) -> bool:    
-    result = bool(len(np.nonzero(network.create_target_weights(network.input_weight_matrix()))))
-    return not result
+def is_zero_fixpoint(network: Net, epsilon=pow(10, -5)) -> bool:
+    target_data = network.create_target_weights(network.input_weight_matrix().detach().numpy())
+    result = np.allclose(target_data, np.zeros_like(target_data), rtol=0, atol=epsilon)
+    # result = bool(len(np.nonzero(network.create_target_weights(network.input_weight_matrix()))))
+    return result
 
 
 def is_secondary_fixpoint(network: Net, epsilon: float = pow(10, -5)) -> bool:

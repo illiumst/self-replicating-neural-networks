@@ -225,7 +225,7 @@ if __name__ == "__main__":
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)
-    ST_synthetic = True
+    ST_synthetic = False
 
     print(f"Running the robustness comparison experiment:")
     RobustnessComparisonExperiment(
