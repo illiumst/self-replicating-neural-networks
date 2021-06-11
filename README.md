@@ -34,8 +34,7 @@
 
 - [ ] How are basins / "attractor areas" shaped?
       - Weired.... tbc...
-      - 
-
+      -
 
 # Future Todos:
 
@@ -51,4 +50,4 @@
 
 - Now saving the whole experiment class as pickle dump (`experiment_pickle.p`, just like cristian), hope thats fine.
 
-- Added a `requirement.txt` for quick venv / pip -r installs. Append as necessary.  
+- Added a `requirement.txt` for quick venv / pip -r installs. Append as necessary.
