@@ -126,7 +126,8 @@ class RobustnessComparisonExperiment:
         # This checks wether to use synthetic setting with multiple seeds
         #   or multi network settings with a singlee seed
 
-        df = pd.DataFrame(columns=['setting', 'noise_level', 'steps', 'absolute_loss', 'time_to_vergence', 'time_as_fixpoint'])
+        df = pd.DataFrame(columns=['setting', 'Noise Level', 'steps', 'absolute_loss',
+                                   'time_to_vergence', 'time_as_fixpoint'])
         with tqdm(total=max(len(self.id_functions), seeds)) as pbar:
             for i, fixpoint in enumerate(self.id_functions):  # 1 / n
                 row_headers.append(fixpoint.name)
@@ -160,21 +161,22 @@ class RobustnessComparisonExperiment:
                                 # When this raises a Type Error, we found a second order fixpoint!
                             steps += 1
 
-                            df.loc[df.shape[0]] = [setting, noise_level, steps, absolute_loss,
+                            df.loc[df.shape[0]] = [setting, f'10e-{noise_level}', steps, absolute_loss,
                                                    time_to_vergence[setting][noise_level],
                                                    time_as_fixpoint[setting][noise_level]]
                     pbar.update(1)
 
         # Get the measuremts at the highest time_time_to_vergence
-        df_sorted = df.sort_values('steps', ascending=False).drop_duplicates(['setting', 'noise_level'])
-        df_melted = df_sorted.reset_index().melt(id_vars=['setting', 'noise_level', 'steps'],
-                                                 value_vars=['time_to_vergence', 'time_as_fixpoint'],
+        df_sorted = df.sort_values('Steps', ascending=False).drop_duplicates(['setting', 'Noise Level'])
+        df_melted = df_sorted.reset_index().melt(id_vars=['setting', 'Noise Level', 'Steps'],
+                                                 value_vars=['Time to vergence', 'Time as fixpoint'],
                                                  var_name="Measurement",
                                                  value_name="Steps")
         # Plotting
-        sns.set(style='whitegrid')
-        bf = sns.boxplot(data=df_melted, y='Steps', x='noise_level', hue='Measurement', palette=PALETTE)
-        bf.set_title('Robustness as self application steps per noise level')
+        sns.set(style='whitegrid', font_scale=2)
+        bf = sns.boxplot(data=df_melted, y='Steps', x='Noise Level', hue='Measurement', palette=PALETTE)
+        synthetic = 'synthetic' if self.is_synthetic else 'natural'
+        bf.set_title(f'Robustness as self application steps per noise level for {synthetic} fixpoints.')
         plt.tight_layout()
 
         # sns.set(rc={'figure.figsize': (10, 50)})
@@ -221,9 +223,9 @@ if __name__ == "__main__":
     ST_steps = 1000
     ST_epochs = 5
     ST_log_step_size = 10
-    ST_population_size = 100
+    ST_population_size = 2
     ST_net_hidden_size = 2
-    ST_net_learning_rate = 0.04
+    ST_net_learning_rate = 0.004
     ST_name_hash = random.getrandbits(32)
     ST_synthetic = True
 

@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
 import pickle
-from torch import mean
-
 from tqdm import tqdm
 import random
 import copy
@@ -17,10 +15,8 @@ import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
 
-
 def prng():
     return random.random()
-
 
 def l1(tup):
     a, b = tup
