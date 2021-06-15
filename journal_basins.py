@@ -115,6 +115,8 @@ class SpawnExperiment:
         self.noise = noise or 10e-5
         print("\nNOISE:", self.noise)
 
+        self.parents = []
+
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
 
@@ -138,7 +140,8 @@ class SpawnExperiment:
                 net.self_train(1, self.log_step_size, self.net_learning_rate)
 
             self.nets.append(net)
-
+            self.parents.append(net)
+    
     def spawn_and_continue(self, number_clones: int = None):
         number_clones = number_clones or self.nr_clones
 

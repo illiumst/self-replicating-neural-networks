@@ -28,7 +28,7 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                      'status_post'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
-        pairwise_net_list = itertools.permutations(self.nets, 2)
+        pairwise_net_list = itertools.combinations(self.parents, 2)
         for net1, net2 in pairwise_net_list:
             # We set parent start_time to just before this epoch ended, so plotting is zoomed in. Comment out to
             # to see full trajectory (but the clones will be very hard to see).
@@ -85,15 +85,11 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                     df.loc[clone.name] = [net1.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post,
                                           self.noise, clone.is_fixpoint]
 
-                # Finally take parent net {i} and finish it's training for comparison to clone development.
-                for _ in range(self.epochs - 1):
-                    for _ in range(self.ST_steps):
-                        net1.self_train(1, self.log_step_size, self.net_learning_rate)
-                net_weights_after = net1.create_target_weights(net1.input_weight_matrix())
-                print(f"Parent net's distance to original position."
-                      f"\nMSE(OG,new): {MAE(net1_target_data, net_weights_after)}"
-                      f"\nMAE(OG,new): {MSE(net1_target_data, net_weights_after)}"
-                      f"\nMIM(OG,new): {mean_invariate_manhattan_distance(net1_target_data, net_weights_after)}\n")
+        for parent in self.parents:
+            for _ in range(self.epochs - 1):
+                for _ in range(self.ST_steps):
+                    parent.self_train(1, self.log_step_size, self.net_learning_rate)
+            
 
         self.df = df
 
@@ -110,7 +106,7 @@ if __name__ == '__main__':
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 8
+    nr_clones = 3
     ST_population_size = 3
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
