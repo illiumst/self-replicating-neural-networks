@@ -124,7 +124,6 @@ class SpawnExperiment:
         # self.visualize_loss()
         self.distance_matrix = distance_matrix(self.nets, print_it=False)
         self.parent_clone_distances = distance_from_parent(self.nets, print_it=False)
-
         self.save()
 
     def populate_environment(self):
@@ -243,7 +242,7 @@ if __name__ == "__main__":
 
     # Define number of networks & their architecture
     nr_clones = 5
-    ST_population_size = 1
+    ST_population_size = 2
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)

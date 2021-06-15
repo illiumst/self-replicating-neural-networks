@@ -216,7 +216,8 @@ def plot_3d_soup(nets_list, exp_name, directory: Union[str, Path]):
     # will send forward the number "1" for batch size with the variable <irrelevant_batch_size>.
     irrelevant_batch_size = 1
 
-    plot_3d_self_train(nets_list, exp_name, directory, irrelevant_batch_size, False)
+    # plot_3d_self_train(nets_list, exp_name, directory, irrelevant_batch_size, False)
+    plot_3d_self_train(nets_list, exp_name, directory, 10, True)
 
 
 def line_chart_fixpoints(fixpoint_counters_history: list, epochs: int, ST_steps_between_SA: int,
