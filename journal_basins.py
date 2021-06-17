@@ -146,7 +146,7 @@ class SpawnExperiment:
         number_clones = number_clones or self.nr_clones
 
         df = pd.DataFrame(
-            columns=['parent', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
+            columns=['name', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
                      'status_post'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
@@ -201,8 +201,7 @@ class SpawnExperiment:
                               f"\nMIM({i},{j}): {MIM_post}\n")
                         self.nets.append(clone)
 
-                    df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise,
-                                          clone.is_fixpoint]
+                    df.loc[clone.name] = [clone.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise, clone.is_fixpoint]
 
                 # Finally take parent net {i} and finish it's training for comparison to clone development.
                 for _ in range(self.epochs - 1):
@@ -252,7 +251,7 @@ if __name__ == "__main__":
 
     print(f"Running the Spawn experiment:")
     exp_list = []
-    for noise_factor in range(2, 5):
+    for noise_factor in range(2, 4):
         exp = SpawnExperiment(
             population_size=ST_population_size,
             log_step_size=ST_log_step_size,
@@ -277,3 +276,9 @@ if __name__ == "__main__":
     mlt = df[["MIM_pre", "MIM_post", "noise"]].melt("noise", var_name="time", value_name='Average Distance')
     sns.catplot(data=mlt, x="time", y="Average Distance", col="noise", kind="point", col_wrap=5, sharey=False)
     plt.savefig(f"output/spawn_basin/{ST_name_hash}/clone_distance_catplot.png")
+
+    mlt = df.melt(id_vars=["name", "noise"], value_vars=["MAE_pre", "MAE_post"], var_name="State", value_name="Distance")
+    ax = sns.catplot(data=mlt, x="State", y="Distance", col="noise", hue="name", kind="point", sharey=False, palette="Greens", legend=False)
+    ax.map(sns.boxplot, "State", "Distance", "noise", linewidth=0.8, order=["MAE_pre", "MAE_post"])
+    plt.savefig(f"output/spawn_basin/{ST_name_hash}/before_after_distance_catplot.png")
+

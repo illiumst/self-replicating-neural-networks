@@ -300,7 +300,7 @@ if __name__ == "__main__":
     # Define number of runs & name:
     ST_runs = 1
     ST_runs_name = "test-27"
-    soup_ST_steps = 1500
+    soup_ST_steps = 2500
     soup_epochs = 2
     soup_log_step_size = 10
 
@@ -314,7 +314,7 @@ if __name__ == "__main__":
 
     print(f"Running the Soup-Spawn experiment:")
     exp_list = []
-    for noise_factor in range(2, 5):
+    for noise_factor in range(2, 3):
         exp = SoupSpawnExperiment(
             population_size=soup_population_size,
             log_step_size=soup_log_step_size,
