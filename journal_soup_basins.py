@@ -231,6 +231,8 @@ class SoupSpawnExperiment:
                 MSE_pre = MSE(net_target_data, clone_pre_weights)
                 MIM_pre = mean_invariate_manhattan_distance(net_target_data, clone_pre_weights)
 
+                df.loc[len(df)] = [clone.name, net.name, MAE_pre, 0, MSE_pre, 0, MIM_pre, 0, self.noise, ""]
+
                 net.children.append(clone)
                 self.clones.append(clone)
                 self.parents_with_clones.append(clone)
@@ -260,10 +262,9 @@ class SoupSpawnExperiment:
                           f"\nMSE({i},{j}): {MSE_post}"
                           f"\nMAE({i},{j}): {MAE_post}"
                           f"\nMIM({i},{j}): {MIM_post}\n")
-                    self.parents_clones_id_functions.append(clone)
+                    self.parents_clones_id_functions.append(clone):
 
-                df.loc[clone.name] = [net.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post, self.noise,
-                                      clone.is_fixpoint]
+                df.loc[df.name==clone.name, ["MAE_post", "MSE_post", "MIM_post", "status_post"]] = [MAE_post, MSE_post, MIM_post, clone.is_fixpoint]
 
             # Finally take parent net {i} and finish it's training for comparison to clone development.
             for _ in range(self.epochs - 1):
@@ -287,9 +288,6 @@ class SoupSpawnExperiment:
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
 
-    def save(self):
-        pickle.dump(self, open(f"{self.directory}/experiment_pickle.p", "wb"))
-        print(f"\nSaved experiment to {self.directory}.")
 
 
 if __name__ == "__main__":
@@ -331,12 +329,19 @@ if __name__ == "__main__":
         )
         exp_list.append(exp)
 
+    directory = Path('output') / 'soup_spawn_basin' / f'{soup_name_hash}'
+    pickle.dump(exp_list, open(f"{directory}/experiment_pickle_{soup_name_hash}.p", "wb"))
+    print(f"\nSaved experiment to {directory}.")
+
     # Boxplot with counts of nr_fixpoints, nr_other, nr_etc. on y-axis
     df = pd.concat([exp.df for exp in exp_list])
     sns.countplot(data=df, x="noise", hue="status_post")
     plt.savefig(f"output/soup_spawn_basin/{soup_name_hash}/fixpoint_status_countplot.png")
 
     # Catplot (either kind="point" or "box") that shows before-after training distances to parent
-    mlt = df[["MIM_pre", "MIM_post", "noise"]].melt("noise", var_name="time", value_name='Average Distance')
-    sns.catplot(data=mlt, x="time", y="Average Distance", col="noise", kind="point", col_wrap=5, sharey=False)
+    mlt = df.melt(id_vars=["name", "noise"], value_vars=["MAE_pre", "MAE_post"], var_name="State", value_name="Distance")
+    ax = sns.catplot(data=mlt, x="State", y="Distance", col="noise", hue="name", kind="point", col_wrap=min(5, len(exp_list)), sharey=False, legend=False)
+    ax.map(sns.boxplot, "State", "Distance", "noise", linewidth=0.8, order=["MAE_pre", "MAE_post"], whis=[0, 100])
+    ax.set_axis_labels("", "Manhattan Distance To Parent Weights", fontsize=15)
+    ax.set_xticklabels(labels=('after noise application', 'after training'), fontsize=15)
     plt.savefig(f"output/soup_spawn_basin/{soup_name_hash}/clone_distance_catplot.png")

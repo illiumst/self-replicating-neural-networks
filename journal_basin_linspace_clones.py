@@ -2,7 +2,7 @@ import copy
 import itertools
 from pathlib import Path
 import random
-
+import pickle
 import pandas as pd
 import numpy as np
 import torch
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     ST_name_hash = random.getrandbits(32)
 
     print(f"Running the Spawn experiment:")
-    df = SpawnLinspaceExperiment(
+    exp = SpawnLinspaceExperiment(
         population_size=ST_population_size,
         log_step_size=ST_log_step_size,
         net_input_size=NET_INPUT_SIZE,
@@ -125,7 +125,12 @@ if __name__ == '__main__':
         nr_clones=nr_clones,
         noise=None,
         directory=Path('output') / 'spawn_basin' / f'{ST_name_hash}' / f'linage'
-    ).df
+    )
+    df = exp.df
+
+    directory = Path('output') / 'spawn_basin' / f'{ST_name_hash}' / 'linage'
+    pickle.dump(exp, open(f"{directory}/experiment_pickle_{ST_name_hash}.p", "wb"))
+    print(f"\nSaved experiment to {directory}.")
 
     # Boxplot with counts of nr_fixpoints, nr_other, nr_etc. on y-axis
     sns.countplot(data=df, x="noise", hue="status_post")

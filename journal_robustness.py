@@ -91,7 +91,6 @@ class RobustnessComparisonExperiment:
         self.time_to_vergence, self.time_as_fixpoint = self.test_robustness(
             seeds=population_size if self.is_synthetic else 1)
 
-        self.save()
 
     def populate_environment(self):
         nets = []
@@ -211,9 +210,6 @@ class RobustnessComparisonExperiment:
             self.loss_history.append(net_loss_history)
         plot_loss(self.loss_history, self.directory)
 
-    def save(self):
-        pickle.dump(self, open(f"{self.directory}/experiment_pickle.p", "wb"))
-        print(f"\nSaved experiment to {self.directory}.")
 
 
 if __name__ == "__main__":
@@ -230,7 +226,7 @@ if __name__ == "__main__":
     ST_synthetic = True
 
     print(f"Running the robustness comparison experiment:")
-    RobustnessComparisonExperiment(
+    exp = RobustnessComparisonExperiment(
         population_size=ST_population_size,
         log_step_size=ST_log_step_size,
         net_input_size=NET_INPUT_SIZE,
@@ -242,3 +238,7 @@ if __name__ == "__main__":
         synthetic=ST_synthetic,
         directory=Path('output') / 'journal_robustness' / f'{ST_name_hash}'
     )
+
+    directory = Path('output') / 'journal_robustness' / f'{ST_name_hash}'
+    pickle.dump(exp, open(f"{directory}/experiment_pickle_{ST_name_hash}.p", "wb"))
+    print(f"\nSaved experiment to {directory}.")

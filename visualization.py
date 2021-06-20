@@ -92,7 +92,6 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
             wm = np.array(wh)
             n, x, y = wm.shape
             wm = wm.reshape(n, x * y)
-            #print(wm.shape, wm)
             weight_histories.append(wm)
 
         weight_data = np.array(weight_histories)
@@ -104,7 +103,6 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
 
         for transformed_trajectory, start_time in zip(np.split(weight_data_pca, n), start_times):
             start_log_time = int(start_time / batch_size)
-            #print(start_time, start_log_time)
             xdata = transformed_trajectory[start_log_time:, 0]
             ydata = transformed_trajectory[start_log_time:, 1]
             zdata = np.arange(start_time, len(ydata)*batch_size+start_time, batch_size).tolist()
@@ -139,7 +137,7 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
             else:
                 ax.scatter(np.asarray(xdata), np.asarray(ydata), zdata, s=3)
 
-    steps = mpatches.Patch(color="white", label=f"{z_axis_legend}: {len(matrices_weights_history)} steps")
+    #steps = mpatches.Patch(color="white", label=f"{z_axis_legend}: {len(matrices_weights_history)} steps")
     population_size = mpatches.Patch(color="white", label=f"Population: {population_size} networks")
 
     if z_axis_legend == "Self-application":
@@ -147,14 +145,14 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
             trained = mpatches.Patch(color="white", label=f"Trained: true")
         else:
             trained = mpatches.Patch(color="white", label=f"Trained: false")
-        ax.legend(handles=[steps, population_size, trained])
+        ax.legend(handles=[population_size, trained])
     else:
-        ax.legend(handles=[steps, population_size])
+        ax.legend(handles=[population_size])
 
-    ax.set_title(f"PCA Weights history")
-    ax.set_xlabel("PCA X")
-    ax.set_ylabel("PCA Y")
-    ax.set_zlabel(f"Epochs")
+    ax.set_title(f"PCA Transformed Weight Trajectories")
+    ax.set_xlabel("PCA Transformed X-Axis")
+    ax.set_ylabel("PCA Transformed Y-Axis")
+    ax.set_zlabel(f"Self Training Steps")
 
     # FIXME: Replace this kind of operation with pathlib.Path() object interactions
     directory = Path(directory)
@@ -168,7 +166,7 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
     else:
         plt.savefig(str(filepath))
 
-    # plt.show()
+    plt.show()
 
 
 def plot_3d_self_train(nets_array: List, exp_name: str, directory: Union[str, Path], batch_size: int, plot_pca_together: bool):
