@@ -1,21 +1,21 @@
-import os
-from pathlib import Path
-import pickle
-from torch import mean
-
-from tqdm import tqdm
-import random
 import copy
-from functionalities_test import is_identity_function, test_status, test_for_fixpoints, is_zero_fixpoint, is_divergent, is_secondary_fixpoint
-from network import Net
-from visualization import plot_3d_self_train, plot_loss, plot_3d_soup
+import pickle
+import random
+from pathlib import Path
+
 import numpy as np
-from tabulate import tabulate
-from sklearn.metrics import mean_absolute_error as MAE
-from sklearn.metrics import mean_squared_error as MSE
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
+from sklearn.metrics import mean_absolute_error as MAE
+from sklearn.metrics import mean_squared_error as MSE
+from tabulate import tabulate
+from tqdm import tqdm
+
+from functionalities_test import is_identity_function, test_status, is_zero_fixpoint, is_divergent, \
+    is_secondary_fixpoint
+from network import Net
+from visualization import plot_loss, plot_3d_soup
 
 
 def prng():
@@ -131,16 +131,16 @@ class SoupSpawnExperiment:
         self.populate_environment()
 
         self.spawn_and_continue()
-        self.weights_evolution_3d_experiment(self.parents, "only_parents")
+        # self.weights_evolution_3d_experiment(self.parents, "only_parents")
         self.weights_evolution_3d_experiment(self.clones, "only_clones")
         self.weights_evolution_3d_experiment(self.parents_with_clones, "parents_with_clones")
-        self.weights_evolution_3d_experiment(self.parents_clones_id_functions, "id_f_with_parents")
+        # self.weights_evolution_3d_experiment(self.parents_clones_id_functions, "id_f_with_parents")
 
         # self.visualize_loss()
         self.distance_matrix = distance_matrix(self.parents_clones_id_functions, print_it=False)
         self.parent_clone_distances = distance_from_parent(self.parents_clones_id_functions, print_it=False)
 
-        self.save()
+        # self.save()
 
     def populate_environment(self):
         loop_population_size = tqdm(range(self.population_size))
@@ -172,7 +172,7 @@ class SoupSpawnExperiment:
     def evolve(self, population):
         print(f"Clone soup has a population of {len(population)} networks")
 
-        loop_epochs = tqdm(range(self.epochs-1))
+        loop_epochs = tqdm(range(self.epochs - 1))
         for i in loop_epochs:
             loop_epochs.set_description("\nEvolving clone soup %s" % i)
 
@@ -195,7 +195,7 @@ class SoupSpawnExperiment:
         number_clones = number_clones or self.nr_clones
 
         df = pd.DataFrame(
-            columns=['parent', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
+            columns=['name', 'parent', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
                      'status_post'])
 
         # MAE_pre, MSE_pre, MIM_pre = 0, 0, 0
@@ -232,6 +232,7 @@ class SoupSpawnExperiment:
                 MIM_pre = mean_invariate_manhattan_distance(net_target_data, clone_pre_weights)
 
                 df.loc[len(df)] = [clone.name, net.name, MAE_pre, 0, MSE_pre, 0, MIM_pre, 0, self.noise, ""]
+                # df.loc[len(df)] = [clone.name, net.name, MAE_pre, 0, 0, 0, 0, 0, self.noise, ""]
 
                 net.children.append(clone)
                 self.clones.append(clone)
@@ -262,9 +263,14 @@ class SoupSpawnExperiment:
                           f"\nMSE({i},{j}): {MSE_post}"
                           f"\nMAE({i},{j}): {MAE_post}"
                           f"\nMIM({i},{j}): {MIM_post}\n")
-                    self.parents_clones_id_functions.append(clone):
+                    self.parents_clones_id_functions.append(clone)
 
-                df.loc[df.name==clone.name, ["MAE_post", "MSE_post", "MIM_post", "status_post"]] = [MAE_post, MSE_post, MIM_post, clone.is_fixpoint]
+                # df.loc[df.name == clone.name, ["MAE_post", "MSE_post", "MIM_post"]] = [MAE_pre, MSE_pre, MIM_pre]
+
+                df.loc[df.name == clone.name, ["MAE_post", "MSE_post", "MIM_post", "status_post"]] = [MAE_post,
+                                                                                                      MSE_post,
+                                                                                                      MIM_post,
+                                                                                                      clone.is_fixpoint]
 
             # Finally take parent net {i} and finish it's training for comparison to clone development.
             for _ in range(self.epochs - 1):
@@ -289,22 +295,21 @@ class SoupSpawnExperiment:
         plot_loss(self.loss_history, self.directory)
 
 
-
 if __name__ == "__main__":
 
     NET_INPUT_SIZE = 4
     NET_OUT_SIZE = 1
 
     # Define number of runs & name:
-    ST_runs = 1
+    ST_runs = 3
     ST_runs_name = "test-27"
-    soup_ST_steps = 2500
+    soup_ST_steps = 1500
     soup_epochs = 2
     soup_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 3
-    soup_population_size = 2
+    nr_clones = 5
+    soup_population_size = 3
     soup_net_hidden_size = 2
     soup_net_learning_rate = 0.04
     soup_attack_chance = 10
@@ -312,7 +317,7 @@ if __name__ == "__main__":
 
     print(f"Running the Soup-Spawn experiment:")
     exp_list = []
-    for noise_factor in range(2, 3):
+    for noise_factor in range(2, 5):
         exp = SoupSpawnExperiment(
             population_size=soup_population_size,
             log_step_size=soup_log_step_size,
@@ -333,15 +338,28 @@ if __name__ == "__main__":
     pickle.dump(exp_list, open(f"{directory}/experiment_pickle_{soup_name_hash}.p", "wb"))
     print(f"\nSaved experiment to {directory}.")
 
-    # Boxplot with counts of nr_fixpoints, nr_other, nr_etc. on y-axis
+    # Concat all dataframes, and add columns depending on where clone weights end up after training (rel. to parent)
     df = pd.concat([exp.df for exp in exp_list])
-    sns.countplot(data=df, x="noise", hue="status_post")
-    plt.savefig(f"output/soup_spawn_basin/{soup_name_hash}/fixpoint_status_countplot.png")
+    df = df.dropna().reset_index()
+    df["relative_distance"] = [ (df.loc[i]["MAE_pre"] - df.loc[i]["MAE_post"]) for i in range(len(df))]
+    df["class"] = ["approaching" if df.loc[i]["relative_distance"] > 0 else "distancing" if df.loc[i]["relative_distance"] < 0 else "stationary" for i in range(len(df))]
+
+    # Countplot of all fixpoint clone after training per class. Uncomment and manually adjust xticklabels if x-ax size gets too small.
+    ax = sns.catplot(kind="count", data=df, x="noise", hue="class", height=5.27, aspect=12.7 / 5.27)
+    ax.set_axis_labels("Noise Levels", "Clone Fixpoints After Training Count ", fontsize=15)
+    # ax.set_xticklabels(labels=('10e-10', '10e-9', '10e-8', '10e-7', '10e-6', '10e-5', '10e-4', '10e-3', '10e-2', '10e-1'), fontsize=15)
+    plt.savefig(f"{directory}/clone_status_after_countplot_{soup_name_hash}.png")
+    plt.clf()
 
     # Catplot (either kind="point" or "box") that shows before-after training distances to parent
-    mlt = df.melt(id_vars=["name", "noise"], value_vars=["MAE_pre", "MAE_post"], var_name="State", value_name="Distance")
-    ax = sns.catplot(data=mlt, x="State", y="Distance", col="noise", hue="name", kind="point", col_wrap=min(5, len(exp_list)), sharey=False, legend=False)
+    mlt = df.melt(id_vars=["name", "noise", "class"], value_vars=["MAE_pre", "MAE_post"], var_name="State",
+                  value_name="Distance")
+    P = ["blue" if mlt.loc[i]["class"] == "approaching" else "orange" if mlt.loc[i]["class"] == "distancing" else "green" for i in range(len(mlt))]
+    # P = sns.color_palette(P, as_cmap=False)
+    ax = sns.catplot(data=mlt, x="State", y="Distance", col="noise", hue="name", kind="point", palette=P,
+                     col_wrap=min(5, len(exp_list)), sharey=False, legend=False)
     ax.map(sns.boxplot, "State", "Distance", "noise", linewidth=0.8, order=["MAE_pre", "MAE_post"], whis=[0, 100])
     ax.set_axis_labels("", "Manhattan Distance To Parent Weights", fontsize=15)
     ax.set_xticklabels(labels=('after noise application', 'after training'), fontsize=15)
-    plt.savefig(f"output/soup_spawn_basin/{soup_name_hash}/clone_distance_catplot.png")
+    plt.savefig(f"{directory}/before_after_distance_catplot_{soup_name_hash}.png")
+    plt.clf()
