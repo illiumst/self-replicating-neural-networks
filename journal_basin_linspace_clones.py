@@ -50,11 +50,12 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                 # To plot clones starting after first epoch (z=ST_steps), set that as start_time!
                 # To make sure PCA will plot the same trajectory up until this point, we clone the
                 # parent-net's weight history as well.
-                in_between_weights = np.linspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
+                # in_between_weights = np.linspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
+                in_between_weights = np.logspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
 
                 for j, in_between_weight in enumerate(in_between_weights):
                     clone = Net(net1.input_size, net1.hidden_size, net1.out_size,
-                                name=f"{net1.name}_clone_{str(j)}", start_time=self.ST_steps)
+                                name=f"{net1.name}_clone_{str(j)}", start_time=self.ST_steps + 100)
                     clone.apply_weights(torch.as_tensor(in_between_weight))
 
                     clone.s_train_weights_history = copy.deepcopy(net1.s_train_weights_history)
@@ -109,8 +110,8 @@ if __name__ == '__main__':
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 20
-    ST_population_size = 3
+    nr_clones = 100
+    ST_population_size = 2
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)
@@ -143,3 +144,30 @@ if __name__ == '__main__':
     # mlt = df[["MIM_pre", "MIM_post", "noise"]].melt("noise", var_name="time", value_name='Average Distance')
     # sns.catplot(data=mlt, x="time", y="Average Distance", col="noise", kind="point", col_wrap=5, sharey=False)
     # plt.savefig(f"output/spawn_basin/{ST_name_hash}/clone_distance_catplot.png")
+
+    # Pointplot with pre and after parent Distances
+    import seaborn as sns
+    from matplotlib import pyplot as plt
+
+    # ptplt = sns.pointplot(data=exp.df, x='MAE_pre', y='MAE_post', join=False)
+    ptplt = sns.pointplot(data=exp.df, x='MIM_pre', y='MIM_post', join=False)
+    ptplt.set(xscale='log', yscale='log')
+    x0, x1 = ptplt.axes.get_xlim()
+    y0, y1 = ptplt.axes.get_ylim()
+    lims = [max(x0, y0), min(x1, y1)]
+    # This is the x=y line using transforms
+    ptplt.plot(lims, lims, 'w', linestyle='dashdot', transform=ptplt.axes.transData)
+    ptplt.plot([0, 1], [0, 1], ':k', transform=ptplt.axes.transAxes)
+    ptplt.set(xlabel='Invariant Manhattan Distance befor Training',
+              ylabel='Invariant Manhattan Distance after Training')
+    plt.xticks(rotation=45)
+    for ind, label in enumerate(ptplt.get_xticklabels()):
+        if ind % 10 == 0:  # every 10th label is kept
+            label.set_visible(True)
+            label.set_text(round(float(label.get_text()), 3))
+        else:
+            label.set_visible(False)
+
+    filepath = exp.directory / 'mim_dist_plot.png'
+    plt.tight_layout()
+    plt.savefig(filepath)
