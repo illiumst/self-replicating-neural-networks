@@ -1,14 +1,12 @@
-import os
 from pathlib import Path
 import pickle
-from torch import mean
 
 from tqdm import tqdm
 import random
 import copy
-from functionalities_test import is_identity_function, test_status, test_for_fixpoints, is_zero_fixpoint, is_divergent, is_secondary_fixpoint
+from functionalities_test import is_identity_function, test_status, is_zero_fixpoint, is_divergent, is_secondary_fixpoint
 from network import Net
-from visualization import plot_3d_self_train, plot_loss, plot_3d_soup
+from visualization import plot_loss, plot_3d_soup
 import numpy as np
 from tabulate import tabulate
 from sklearn.metrics import mean_absolute_error as MAE
@@ -16,10 +14,6 @@ from sklearn.metrics import mean_squared_error as MSE
 import pandas as pd
 import seaborn as sns
 from matplotlib import pyplot as plt
-
-
-def prng():
-    return random.random()
 
 
 def l1(tup):
@@ -88,20 +82,6 @@ def distance_from_parent(nets, distance="MIM", print_it=True):
 
 class SoupSpawnExperiment:
 
-    @staticmethod
-    def apply_noise(network, noise: int):
-        """ Changing the weights of a network to values + noise """
-
-        for layer_id, layer_name in enumerate(network.state_dict()):
-            for line_id, line_values in enumerate(network.state_dict()[layer_name]):
-                for weight_id, weight_value in enumerate(network.state_dict()[layer_name][line_id]):
-                    # network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
-                    if prng() < 0.5:
-                        network.state_dict()[layer_name][line_id][weight_id] = weight_value + noise
-                    else:
-                        network.state_dict()[layer_name][line_id][weight_id] = weight_value - noise
-
-        return network
 
     def __init__(self, population_size, log_step_size, net_input_size, net_hidden_size, net_out_size, net_learning_rate,
                  epochs, st_steps, attack_chance, nr_clones, noise, directory) -> None:
@@ -220,8 +200,7 @@ class SoupSpawnExperiment:
                 clone = Net(net.input_size, net.hidden_size, net.out_size,
                             f"net_{str(i)}_clone_{str(j)}", start_time=self.ST_steps)
                 clone.load_state_dict(copy.deepcopy(net.state_dict()))
-                rand_noise = prng() * self.noise
-                clone = self.apply_noise(clone, rand_noise)
+                clone = clone.apply_noise(self.noise)
                 clone.s_train_weights_history = copy.deepcopy(net.s_train_weights_history)
                 clone.number_trained = copy.deepcopy(net.number_trained)
 
@@ -262,9 +241,9 @@ class SoupSpawnExperiment:
                           f"\nMSE({i},{j}): {MSE_post}"
                           f"\nMAE({i},{j}): {MAE_post}"
                           f"\nMIM({i},{j}): {MIM_post}\n")
-                    self.parents_clones_id_functions.append(clone):
+                    self.parents_clones_id_functions.append(clone)
 
-                df.loc[df.name==clone.name, ["MAE_post", "MSE_post", "MIM_post", "status_post"]] = [MAE_post, MSE_post, MIM_post, clone.is_fixpoint]
+                df.loc[df.name == clone.name, ["MAE_post", "MSE_post", "MIM_post", "status_post"]] = [MAE_post, MSE_post, MIM_post, clone.is_fixpoint]
 
             # Finally take parent net {i} and finish it's training for comparison to clone development.
             for _ in range(self.epochs - 1):

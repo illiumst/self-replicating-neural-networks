@@ -8,14 +8,11 @@ import numpy as np
 import torch
 
 from functionalities_test import is_identity_function, test_status
-from journal_basins import SpawnExperiment, prng, mean_invariate_manhattan_distance
+from journal_basins import SpawnExperiment, mean_invariate_manhattan_distance
 from network import Net
 
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import mean_squared_error as MSE
-
-import seaborn as sns
-from matplotlib import pyplot as plt
 
 
 class SpawnLinspaceExperiment(SpawnExperiment):
@@ -28,6 +25,12 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                      'status_post'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
+        # parent = self.parents[0]
+        # parent_clone = clone = Net(parent.input_size, parent.hidden_size, parent.out_size,
+        #                         name=f"{parent.name}_clone_{0}", start_time=self.ST_steps)
+        # parent_clone.apply_weights(torch.as_tensor(parent.create_target_weights(parent.input_weight_matrix())))
+        # parent_clone = parent_clone.apply_noise(self.noise)
+        # self.parents.append(parent_clone)
         pairwise_net_list = itertools.combinations(self.parents, 2)
         for net1, net2 in pairwise_net_list:
             # We set parent start_time to just before this epoch ended, so plotting is zoomed in. Comment out to
@@ -42,11 +45,12 @@ class SpawnLinspaceExperiment(SpawnExperiment):
             net2_target_data = net2.create_target_weights(net2_input_data)
 
             if is_identity_function(net1) and is_identity_function(net2):
+            # if True:
                 # Clone the fixpoint x times and add (+-)self.noise to weight-sets randomly;
                 # To plot clones starting after first epoch (z=ST_steps), set that as start_time!
                 # To make sure PCA will plot the same trajectory up until this point, we clone the
                 # parent-net's weight history as well.
-                in_between_weights = np.linspace(net1_target_data, net2_target_data, number_clones,endpoint=False)
+                in_between_weights = np.linspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
 
                 for j, in_between_weight in enumerate(in_between_weights):
                     clone = Net(net1.input_size, net1.hidden_size, net1.out_size,
@@ -89,7 +93,6 @@ class SpawnLinspaceExperiment(SpawnExperiment):
             for _ in range(self.epochs - 1):
                 for _ in range(self.ST_steps):
                     parent.self_train(1, self.log_step_size, self.net_learning_rate)
-            
 
         self.df = df
 
@@ -106,7 +109,7 @@ if __name__ == '__main__':
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 3
+    nr_clones = 20
     ST_population_size = 3
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
@@ -123,7 +126,7 @@ if __name__ == '__main__':
         epochs=ST_epochs,
         st_steps=ST_steps,
         nr_clones=nr_clones,
-        noise=None,
+        noise=1e-8,
         directory=Path('output') / 'spawn_basin' / f'{ST_name_hash}' / f'linage'
     )
     df = exp.df
@@ -133,10 +136,10 @@ if __name__ == '__main__':
     print(f"\nSaved experiment to {directory}.")
 
     # Boxplot with counts of nr_fixpoints, nr_other, nr_etc. on y-axis
-    sns.countplot(data=df, x="noise", hue="status_post")
-    plt.savefig(f"output/spawn_basin/{ST_name_hash}/fixpoint_status_countplot.png")
+    # sns.countplot(data=df, x="noise", hue="status_post")
+    # plt.savefig(f"output/spawn_basin/{ST_name_hash}/fixpoint_status_countplot.png")
 
     # Catplot (either kind="point" or "box") that shows before-after training distances to parent
-    mlt = df[["MIM_pre", "MIM_post", "noise"]].melt("noise", var_name="time", value_name='Average Distance')
-    sns.catplot(data=mlt, x="time", y="Average Distance", col="noise", kind="point", col_wrap=5, sharey=False)
-    plt.savefig(f"output/spawn_basin/{ST_name_hash}/clone_distance_catplot.png")
+    # mlt = df[["MIM_pre", "MIM_post", "noise"]].melt("noise", var_name="time", value_name='Average Distance')
+    # sns.catplot(data=mlt, x="time", y="Average Distance", col="noise", kind="point", col_wrap=5, sharey=False)
+    # plt.savefig(f"output/spawn_basin/{ST_name_hash}/clone_distance_catplot.png")

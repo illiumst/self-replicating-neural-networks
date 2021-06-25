@@ -9,6 +9,9 @@ from sklearn.decomposition import PCA
 import random
 import string
 
+from matplotlib import rcParams
+rcParams['axes.labelpad'] = 20
+
 
 def plot_output(output):
     """ Plotting the values of the final output """
@@ -65,6 +68,7 @@ def bar_chart_fixpoints(fixpoint_counter: Dict, population_size: int, directory:
     plt.xticks(range(len(fixpoint_counter)), list(fixpoint_counter.keys()))
 
     directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
     filename = f"{str(population_size)}_nets_fixpoints_barchart.png"
     filepath = directory / filename
     plt.savefig(str(filepath))
@@ -139,19 +143,19 @@ def plot_3d(matrices_weights_history, directory: Union[str, Path], population_si
 
     #steps = mpatches.Patch(color="white", label=f"{z_axis_legend}: {len(matrices_weights_history)} steps")
     population_size = mpatches.Patch(color="white", label=f"Population: {population_size} networks")
-
-    if z_axis_legend == "Self-application":
-        if is_trained == '_trained':
-            trained = mpatches.Patch(color="white", label=f"Trained: true")
+    if False:
+        if z_axis_legend == "Self-application":
+            if is_trained == '_trained':
+                trained = mpatches.Patch(color="white", label=f"Trained: true")
+            else:
+                trained = mpatches.Patch(color="white", label=f"Trained: false")
+            ax.legend(handles=[population_size, trained])
         else:
-            trained = mpatches.Patch(color="white", label=f"Trained: false")
-        ax.legend(handles=[population_size, trained])
-    else:
-        ax.legend(handles=[population_size])
+            ax.legend(handles=[population_size])
 
     ax.set_title(f"PCA Transformed Weight Trajectories")
-    ax.set_xlabel("PCA Transformed X-Axis")
-    ax.set_ylabel("PCA Transformed Y-Axis")
+    # ax.set_xlabel("PCA Transformed X-Axis")
+    # ax.set_ylabel("PCA Transformed Y-Axis")
     ax.set_zlabel(f"Self Training Steps")
 
     # FIXME: Replace this kind of operation with pathlib.Path() object interactions

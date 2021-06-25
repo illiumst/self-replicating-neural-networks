@@ -91,7 +91,6 @@ class RobustnessComparisonExperiment:
         self.time_to_vergence, self.time_as_fixpoint = self.test_robustness(
             seeds=population_size if self.is_synthetic else 1)
 
-
     def populate_environment(self):
         nets = []
         if self.is_synthetic:
@@ -125,8 +124,8 @@ class RobustnessComparisonExperiment:
         # This checks wether to use synthetic setting with multiple seeds
         #   or multi network settings with a singlee seed
 
-        df = pd.DataFrame(columns=['setting', 'Noise Level', 'steps', 'absolute_loss',
-                                   'time_to_vergence', 'time_as_fixpoint'])
+        df = pd.DataFrame(columns=['setting', 'Noise Level', 'Self Train Steps', 'absolute_loss',
+                                   'Time to vergence', 'Time as fixpoint'])
         with tqdm(total=max(len(self.id_functions), seeds)) as pbar:
             for i, fixpoint in enumerate(self.id_functions):  # 1 / n
                 row_headers.append(fixpoint.name)
@@ -138,8 +137,7 @@ class RobustnessComparisonExperiment:
                         clone = Net(fixpoint.input_size, fixpoint.hidden_size, fixpoint.out_size,
                                     f"{fixpoint.name}_clone_noise10e-{noise_level}")
                         clone.load_state_dict(copy.deepcopy(fixpoint.state_dict()))
-                        rand_noise = prng() * pow(10, -noise_level)  # n / 1
-                        clone = self.apply_noise(clone, rand_noise)
+                        clone = clone.apply_noise(pow(10, -noise_level))
 
                         while not is_zero_fixpoint(clone) and not is_divergent(clone):
                             # -> before
@@ -154,7 +152,6 @@ class RobustnessComparisonExperiment:
 
                             absolute_loss = F.l1_loss(target_data_pre_application, target_data_post_application).item()
 
-
                             if is_identity_function(clone):
                                 time_as_fixpoint[setting][noise_level] += 1
                                 # When this raises a Type Error, we found a second order fixpoint!
@@ -166,26 +163,24 @@ class RobustnessComparisonExperiment:
                     pbar.update(1)
 
         # Get the measuremts at the highest time_time_to_vergence
-        df_sorted = df.sort_values('Steps', ascending=False).drop_duplicates(['setting', 'Noise Level'])
-        df_melted = df_sorted.reset_index().melt(id_vars=['setting', 'Noise Level', 'Steps'],
+        df_sorted = df.sort_values('Self Train Steps', ascending=False).drop_duplicates(['setting', 'Noise Level'])
+        df_melted = df_sorted.reset_index().melt(id_vars=['setting', 'Noise Level', 'Self Train Steps'],
                                                  value_vars=['Time to vergence', 'Time as fixpoint'],
                                                  var_name="Measurement",
-                                                 value_name="Steps")
+                                                 value_name="Steps").sort_values('Noise Level')
         # Plotting
         sns.set(style='whitegrid', font_scale=2)
         bf = sns.boxplot(data=df_melted, y='Steps', x='Noise Level', hue='Measurement', palette=PALETTE)
         synthetic = 'synthetic' if self.is_synthetic else 'natural'
-        bf.set_title(f'Robustness as self application steps per noise level for {synthetic} fixpoints.')
+        # bf.set_title(f'Robustness as self application steps per noise level for {synthetic} fixpoints.')
         plt.tight_layout()
 
         # sns.set(rc={'figure.figsize': (10, 50)})
         # bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
         #                  col='noise_level', col_wrap=3, showfliers=False)
-        directory = Path('output') / 'robustness'
-        directory.mkdir(parents=True, exist_ok=True)
-        filename = f"absolute_loss_perapplication_boxplot_grid.png"
-        filepath = directory / filename
 
+        filename = f"absolute_loss_perapplication_boxplot_grid_{'synthetic' if self.is_synthetic else 'wild'}.png"
+        filepath = self.directory / filename
         plt.savefig(str(filepath))
 
         if print_it:
@@ -219,11 +214,11 @@ if __name__ == "__main__":
     ST_steps = 1000
     ST_epochs = 5
     ST_log_step_size = 10
-    ST_population_size = 2
+    ST_population_size = 500
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.004
     ST_name_hash = random.getrandbits(32)
-    ST_synthetic = True
+    ST_synthetic = False
 
     print(f"Running the robustness comparison experiment:")
     exp = RobustnessComparisonExperiment(
