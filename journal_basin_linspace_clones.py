@@ -6,6 +6,7 @@ import pickle
 import pandas as pd
 import numpy as np
 import torch
+from sklearn import preprocessing
 
 from functionalities_test import is_identity_function, test_status
 from journal_basins import SpawnExperiment, mean_invariate_manhattan_distance
@@ -21,8 +22,8 @@ class SpawnLinspaceExperiment(SpawnExperiment):
         number_clones = number_clones or self.nr_clones
 
         df = pd.DataFrame(
-            columns=['parent', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
-                     'status_post'])
+            columns=['clone', 'parent', 'parent2', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
+                     'status_pst'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
         # parent = self.parents[0]
@@ -31,7 +32,7 @@ class SpawnLinspaceExperiment(SpawnExperiment):
         # parent_clone.apply_weights(torch.as_tensor(parent.create_target_weights(parent.input_weight_matrix())))
         # parent_clone = parent_clone.apply_noise(self.noise)
         # self.parents.append(parent_clone)
-        pairwise_net_list = itertools.combinations(self.parents, 2)
+        pairwise_net_list = list(itertools.combinations(self.parents, 2))
         for net1, net2 in pairwise_net_list:
             # We set parent start_time to just before this epoch ended, so plotting is zoomed in. Comment out to
             # to see full trajectory (but the clones will be very hard to see).
@@ -50,12 +51,13 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                 # To plot clones starting after first epoch (z=ST_steps), set that as start_time!
                 # To make sure PCA will plot the same trajectory up until this point, we clone the
                 # parent-net's weight history as well.
-                # in_between_weights = np.linspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
-                in_between_weights = np.logspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
+
+                in_between_weights = np.linspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
+                # in_between_weights = np.logspace(net1_target_data, net2_target_data, number_clones, endpoint=False)
 
                 for j, in_between_weight in enumerate(in_between_weights):
                     clone = Net(net1.input_size, net1.hidden_size, net1.out_size,
-                                name=f"{net1.name}_clone_{str(j)}", start_time=self.ST_steps + 100)
+                                name=f"{net1.name}_{net2.name}_clone_{str(j)}", start_time=self.ST_steps + 100)
                     clone.apply_weights(torch.as_tensor(in_between_weight))
 
                     clone.s_train_weights_history = copy.deepcopy(net1.s_train_weights_history)
@@ -67,10 +69,16 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                     MSE_pre = MSE(net1_target_data, clone_pre_weights)
                     MIM_pre = mean_invariate_manhattan_distance(net1_target_data, clone_pre_weights)
 
-                    # Then finish training each clone {j} (for remaining epoch-1 * ST_steps) ..
-                    for _ in range(self.epochs - 1):
-                        for _ in range(self.ST_steps):
-                            clone.self_train(1, self.log_step_size, self.net_learning_rate)
+                    try:
+                        # Then finish training each clone {j} (for remaining epoch-1 * ST_steps) ..
+                        for _ in range(self.epochs - 1):
+                            for _ in range(self.ST_steps):
+                                clone.self_train(1, self.log_step_size, self.net_learning_rate)
+                                if any([torch.isnan(x).any() for x in clone.parameters()]):
+                                    raise ValueError
+                    except ValueError:
+                        print("Ran into nan in 'in beetween weights' array.")
+                        continue
 
                     # Post Training distances for comparison
                     clone_post_weights = clone.create_target_weights(clone.input_weight_matrix())
@@ -81,15 +89,22 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                     # .. log to data-frame and add to nets for 3d plotting if they are fixpoints themselves.
                     test_status(clone)
                     if is_identity_function(clone):
-                        print(f"Clone {j} (of net_{net1.name}) is fixpoint."
+                        print(f"Clone {j} (between {net1.name} and {net2.name}) is fixpoint."
                               f"\nMSE({net1.name},{j}): {MSE_post}"
                               f"\nMAE({net1.name},{j}): {MAE_post}"
                               f"\nMIM({net1.name},{j}): {MIM_post}\n")
                         self.nets.append(clone)
 
-                    df.loc[clone.name] = [net1.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post,
+                    df.loc[len(df)] = [j, net1.name, net2.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post,
                                           self.noise, clone.is_fixpoint]
 
+        for net1, net2 in pairwise_net_list:
+            value = 'MAE'
+            c_selector = [f'{value}_pre', f'{value}_post']
+            values = df.loc[(df['parent'] == net1.name) & (df['parent2'] == net2.name)][c_selector]
+            this_min, this_max = values.values.min(), values.values.max()
+            df.loc[(df['parent'] == net1.name) &
+                   (df['parent2'] == net2.name), c_selector] = (values - this_min) / (this_max - this_min)
         for parent in self.parents:
             for _ in range(self.epochs - 1):
                 for _ in range(self.ST_steps):
@@ -110,8 +125,8 @@ if __name__ == '__main__':
     ST_log_step_size = 10
 
     # Define number of networks & their architecture
-    nr_clones = 100
-    ST_population_size = 2
+    nr_clones = 25
+    ST_population_size = 10
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.04
     ST_name_hash = random.getrandbits(32)
@@ -147,26 +162,26 @@ if __name__ == '__main__':
 
     # Pointplot with pre and after parent Distances
     import seaborn as sns
-    from matplotlib import pyplot as plt
+    from matplotlib import pyplot as plt, ticker
 
     # ptplt = sns.pointplot(data=exp.df, x='MAE_pre', y='MAE_post', join=False)
-    ptplt = sns.pointplot(data=exp.df, x='MIM_pre', y='MIM_post', join=False)
-    ptplt.set(xscale='log', yscale='log')
+    ptplt = sns.scatterplot(x=exp.df['MAE_pre'], y=exp.df['MAE_post'])
+    # ptplt.set(xscale='log', yscale='log')
     x0, x1 = ptplt.axes.get_xlim()
     y0, y1 = ptplt.axes.get_ylim()
     lims = [max(x0, y0), min(x1, y1)]
     # This is the x=y line using transforms
     ptplt.plot(lims, lims, 'w', linestyle='dashdot', transform=ptplt.axes.transData)
     ptplt.plot([0, 1], [0, 1], ':k', transform=ptplt.axes.transAxes)
-    ptplt.set(xlabel='Invariant Manhattan Distance befor Training',
-              ylabel='Invariant Manhattan Distance after Training')
-    plt.xticks(rotation=45)
-    for ind, label in enumerate(ptplt.get_xticklabels()):
-        if ind % 10 == 0:  # every 10th label is kept
-            label.set_visible(True)
-            label.set_text(round(float(label.get_text()), 3))
-        else:
-            label.set_visible(False)
+    ptplt.set(xlabel='Mean Absolute Distance before Self-Training',
+              ylabel='Mean Absolute Distance after Self-Training')
+    # ptplt.axes.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: round(float(x), 2)))
+    # ptplt.xticks(rotation=45)
+    #for ind, label in enumerate(ptplt.get_xticklabels()):
+    #    if ind % 10 == 0:  # every 10th label is kept
+    #        label.set_visible(True)
+    #    else:
+    #        label.set_visible(False)
 
     filepath = exp.directory / 'mim_dist_plot.png'
     plt.tight_layout()
