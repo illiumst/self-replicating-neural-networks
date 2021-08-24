@@ -3,6 +3,7 @@ import copy
 import random
 from typing import Union
 
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -114,7 +115,6 @@ class Net(nn.Module):
         """ Training a network to predict its own weights in order to self-replicate. """
 
         optimizer = optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9)
-        self.trained = True
 
         for training_step in range(training_steps):
             self.number_trained += 1
@@ -145,9 +145,10 @@ class Net(nn.Module):
             self.s_train_weights_history.append(weights.T.detach().numpy())
             self.loss_history.append(loss.detach().numpy().item())
 
+        self.trained = True
         return weights.detach().numpy(), loss, self.loss_history
 
-    def self_application(self,  SA_steps: int, log_step_size: Union[int, None] = None):
+    def self_application(self, SA_steps: int, log_step_size: Union[int, None] = None):
         """ Inputting the weights of a network to itself for a number of steps, without backpropagation. """
 
         for i in range(SA_steps):
@@ -190,3 +191,58 @@ class Net(nn.Module):
                         self.state_dict()[layer_name][line_id][weight_id] = weight_value - noise_size * prng()
 
         return self
+
+
+class SecondaryNet(Net):
+
+    def self_train(self, training_steps: int, log_step_size: int, learning_rate: float) -> (np.ndarray, Tensor, list):
+        """ Training a network to predict its own weights in order to self-replicate. """
+
+        optimizer = optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9)
+        df = pd.DataFrame(columns=['step', 'loss', 'first_to_target_loss', 'second_to_target_loss', 'second_to_first_loss'])
+        is_diverged = False
+        for training_step in range(training_steps):
+            self.number_trained += 1
+            optimizer.zero_grad()
+            input_data = self.input_weight_matrix()
+            target_data = self.create_target_weights(input_data)
+
+            intermediate_output = self(input_data)
+            second_input = copy.deepcopy(input_data)
+            second_input[:, 0] = intermediate_output.squeeze()
+
+            output = self(second_input)
+            second_to_target_loss = F.mse_loss(output, target_data)
+            first_to_target_loss = F.mse_loss(intermediate_output, target_data * -1)
+            second_to_first_loss = F.mse_loss(intermediate_output, output)
+            if any([torch.isnan(x) or torch.isinf(x) for x in [second_to_first_loss, first_to_target_loss, second_to_target_loss]]):
+                print('is nan')
+                is_diverged = True
+                break
+
+            loss = second_to_target_loss + first_to_target_loss
+            df.loc[df.shape[0]] = [df.shape[0], loss.detach().numpy().item(),
+                                   first_to_target_loss.detach().numpy().item(),
+                                   second_to_target_loss.detach().numpy().item(),
+                                   second_to_first_loss.detach().numpy().item()]
+            loss.backward()
+            optimizer.step()
+
+        self.trained = True
+        return df, is_diverged
+
+
+if __name__ == '__main__':
+    is_div = True
+    while is_div:
+        net = SecondaryNet(4, 2, 1, "SecondaryNet")
+        data_df, is_div = net.self_train(20000, 25, 1e-4)
+    from matplotlib import pyplot as plt
+    import seaborn as sns
+    # data_df = data_df[::-1]  # Reverse
+    fig = sns.lineplot(data=data_df[[x for x in data_df.columns if x != 'step']])
+    # fig.set(yscale='log')
+    print(data_df.iloc[-1])
+    print(data_df.iloc[0])
+    plt.show()
+    print("done")
