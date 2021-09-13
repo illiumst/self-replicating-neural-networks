@@ -1,5 +1,6 @@
 # from __future__ import annotations
 import copy
+import inspect
 import random
 from typing import Union
 
@@ -167,17 +168,29 @@ class Net(nn.Module):
             """ See after how many steps of SA is the output not changing anymore: """
             # print(f"Self-app. step {i+1}: {Experiment.changing_rate(output2, output)}")
 
-            self = self.apply_weights(output)
+            _ = self.apply_weights(output)
 
         return self
 
     def attack(self, other_net):
         other_net_weights = other_net.input_weight_matrix()
         my_evaluation = self(other_net_weights)
-
-        SA_steps = 1
-
         return other_net.apply_weights(my_evaluation)
+
+    def melt(self, other_net):
+        try:
+            melted_name = self.name + other_net.name
+        except AttributeError:
+            melted_name = None
+        melted_weights = self.create_target_weights(other_net.input_weight_matrix())
+        self_weights = self.create_target_weights(self.input_weight_matrix())
+        weight_indxs = list(range(len(self_weights)))
+        random.shuffle(weight_indxs)
+        for weight_idx in weight_indxs[:len(melted_weights) // 2]:
+            melted_weights[weight_idx] = self_weights[weight_idx]
+        melted_net = Net(i_size=self.input_size, h_size=self.hidden_size, o_size=self.out_size, name=melted_name)
+        melted_net.apply_weights(melted_weights)
+        return melted_net
 
     def apply_noise(self, noise_size: float):
         """ Changing the weights of a network to values + noise """

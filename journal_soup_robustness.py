@@ -7,6 +7,7 @@ from typing import Union
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from torch.nn import functional as F
@@ -158,8 +159,10 @@ class SoupRobustnessExperiment:
         df = df.replace([np.inf, -np.inf], np.nan)
         df = df.dropna()
         # sns.set(rc={'figure.figsize': (10, 50)})
+        sns.set_theme(style="ticks")
         bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
                          col='noise_level', col_wrap=3, showfliers=False)
+
         directory = Path('output') / 'robustness'
         filename = f"absolute_loss_perapplication_boxplot_grid.png"
         filepath = directory / filename
@@ -167,7 +170,7 @@ class SoupRobustnessExperiment:
         plt.savefig(str(filepath))
 
         if print_it:
-            col_headers = [str(f"10e-{d}") for d in range(noise_levels)]
+            col_headers = [str(f"10-{d}") for d in range(noise_levels)]
 
             print(f"\nAppplications steps until divergence / zero: ")
             print(tabulate(avg_time_to_vergence, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
@@ -221,7 +224,7 @@ if __name__ == "__main__":
     # soup_SA_steps = 10
 
     # Define number of networks & their architecture
-    soup_population_size = 20
+    soup_population_size = 4
     soup_net_hidden_size = 2
     soup_net_learning_rate = 0.04
 

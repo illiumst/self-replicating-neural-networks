@@ -6,6 +6,8 @@ import random
 import copy
 
 from pathlib import Path
+
+from matplotlib.ticker import ScalarFormatter
 from tqdm import tqdm
 from tabulate import tabulate
 
@@ -125,7 +127,7 @@ class RobustnessComparisonExperiment:
         #   or multi network settings with a singlee seed
 
         df = pd.DataFrame(columns=['setting', 'Noise Level', 'Self Train Steps', 'absolute_loss',
-                                   'Time to vergence', 'Time as fixpoint'])
+                                   'Time to convergence', 'Time as fixpoint'])
         with tqdm(total=max(len(self.id_functions), seeds)) as pbar:
             for i, fixpoint in enumerate(self.id_functions):  # 1 / n
                 row_headers.append(fixpoint.name)
@@ -157,7 +159,7 @@ class RobustnessComparisonExperiment:
                                 # When this raises a Type Error, we found a second order fixpoint!
                             steps += 1
 
-                            df.loc[df.shape[0]] = [setting, f'10e-{noise_level}', steps, absolute_loss,
+                            df.loc[df.shape[0]] = [setting, f'$10^{{-{noise_level}}}$', steps, absolute_loss,
                                                    time_to_vergence[setting][noise_level],
                                                    time_as_fixpoint[setting][noise_level]]
                     pbar.update(1)
@@ -165,14 +167,19 @@ class RobustnessComparisonExperiment:
         # Get the measuremts at the highest time_time_to_vergence
         df_sorted = df.sort_values('Self Train Steps', ascending=False).drop_duplicates(['setting', 'Noise Level'])
         df_melted = df_sorted.reset_index().melt(id_vars=['setting', 'Noise Level', 'Self Train Steps'],
-                                                 value_vars=['Time to vergence', 'Time as fixpoint'],
+                                                 value_vars=['Time to convergence', 'Time as fixpoint'],
                                                  var_name="Measurement",
                                                  value_name="Steps").sort_values('Noise Level')
         # Plotting
+        plt.rcParams.update({
+            "text.usetex": True,
+            "font.family": "sans-serif",
+            "font.size": 12,
+            "font.weight": 'bold',
+            "font.sans-serif": ["Helvetica"]})
         sns.set(style='whitegrid', font_scale=2)
         bf = sns.boxplot(data=df_melted, y='Steps', x='Noise Level', hue='Measurement', palette=PALETTE)
         synthetic = 'synthetic' if self.is_synthetic else 'natural'
-        # bf.set_title(f'Robustness as self application steps per noise level for {synthetic} fixpoints.')
         plt.tight_layout()
 
         # sns.set(rc={'figure.figsize': (10, 50)})
@@ -206,7 +213,6 @@ class RobustnessComparisonExperiment:
         plot_loss(self.loss_history, self.directory)
 
 
-
 if __name__ == "__main__":
     NET_INPUT_SIZE = 4
     NET_OUT_SIZE = 1
@@ -214,12 +220,11 @@ if __name__ == "__main__":
     ST_steps = 1000
     ST_epochs = 5
     ST_log_step_size = 10
-    ST_population_size = 500
+    ST_population_size = 1000
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.004
     ST_name_hash = random.getrandbits(32)
-    ST_synthetic = True
-
+    ST_synthetic = False
 
     print(f"Running the robustness comparison experiment:")
     exp = RobustnessComparisonExperiment(

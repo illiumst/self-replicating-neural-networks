@@ -63,6 +63,23 @@ class SoupExperiment:
             net = Net(self.net_input_size, self.net_hidden_size, self.net_out_size, net_name)
             self.population.append(net)
 
+    def population_self_train(self):
+        #  Self-training each network in the population
+        for j in range(self.population_size):
+            net = self.population[j]
+
+            for _ in range(self.ST_steps):
+                net.self_train(1, self.log_step_size, self.net_learning_rate)
+
+    def population_attack(self):
+        # A network attacking another network with a given percentage
+        if random.randint(1, 100) <= self.attack_chance:
+            random_net1, random_net2 = random.sample(range(self.population_size), 2)
+            random_net1 = self.population[random_net1]
+            random_net2 = self.population[random_net2]
+            print(f"\n Attack: {random_net1.name} -> {random_net2.name}")
+            random_net1.attack(random_net2)
+
     def evolve(self):
         """ Evolving consists of attacking & self-training. """
 
@@ -71,19 +88,10 @@ class SoupExperiment:
             loop_epochs.set_description("Evolving soup %s" % i)
 
             # A network attacking another network with a given percentage
-            if random.randint(1, 100) <= self.attack_chance:
-                random_net1, random_net2 = random.sample(range(self.population_size), 2)
-                random_net1 = self.population[random_net1]
-                random_net2 = self.population[random_net2]
-                print(f"\n Attack: {random_net1.name} -> {random_net2.name}")
-                random_net1.attack(random_net2)
+            self.population_attack()
 
             #  Self-training each network in the population
-            for j in range(self.population_size):
-                net = self.population[j]
-                
-                for _ in range(self.ST_steps):
-                    net.self_train(1, self.log_step_size, self.net_learning_rate)
+            self.population_self_train()
 
             # Testing for fixpoints after each batch of ST steps to see relevant data
             if i % self.ST_steps == 0:

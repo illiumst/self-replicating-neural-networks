@@ -30,11 +30,10 @@
 
 - [x] Box-Plot of Avg. Distance of clones from parent
 
-- [ ] Search subspace between two fixpoints by linage(10**-5), check were they end up
+- [x] Search subspace between two fixpoints by linage(10**-5), check were they end up
 
-- [ ] How are basins / "attractor areas" shaped?
-      - Weired.... tbc...
-      -
+- [x] How are basins / "attractor areas" shaped?
+
 
 # Future Todos:
 

@@ -262,7 +262,7 @@ if __name__ == "__main__":
     # Countplot of all fixpoint clone after training per class. Uncomment and manually adjust xticklabels if x-ax size gets too small.
     ax = sns.catplot(kind="count", data=df, x="noise", hue="class", height=5.27, aspect=11.7/5.27)
     ax.set_axis_labels("Noise Levels", "Clone Fixpoints After Training Count ", fontsize=15)
-    #ax.set_xticklabels(labels=('10e-10', '10e-9', '10e-8', '10e-7', '10e-6', '10e-5', '10e-4', '10e-3', '10e-2', '10e-1'), fontsize=15)
+    ax.set_xticklabels(labels=('10e-10', '10e-9', '10e-8', '10e-7', '10e-6', '10e-5', '10e-4', '10e-3', '10e-2', '10e-1'), fontsize=15)
     plt.savefig(f"{directory}/clone_status_after_countplot_{ST_name_hash}.png")
     plt.clf()
 
@@ -274,5 +274,6 @@ if __name__ == "__main__":
     ax.map(sns.boxplot, "State", "Distance", "noise", linewidth=0.8, order=["MAE_pre", "MAE_post"], whis=[0, 100])
     ax.set_axis_labels("", "Manhattan Distance To Parent Weights", fontsize=15)
     ax.set_xticklabels(labels=('after noise application', 'after training'), fontsize=15)
+    plt.ticklabel_format(style='sci', axis='x')
     plt.savefig(f"{directory}/before_after_distance_catplot_{ST_name_hash}.png")
     plt.clf()
