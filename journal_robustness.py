@@ -137,7 +137,7 @@ class RobustnessComparisonExperiment:
                     for noise_level in range(noise_levels):
                         steps = 0
                         clone = Net(fixpoint.input_size, fixpoint.hidden_size, fixpoint.out_size,
-                                    f"{fixpoint.name}_clone_noise10e-{noise_level}")
+                                    f"{fixpoint.name}_clone_noise_1e-{noise_level}")
                         clone.load_state_dict(copy.deepcopy(fixpoint.state_dict()))
                         clone = clone.apply_noise(pow(10, -noise_level))
 
@@ -159,7 +159,8 @@ class RobustnessComparisonExperiment:
                                 # When this raises a Type Error, we found a second order fixpoint!
                             steps += 1
 
-                            df.loc[df.shape[0]] = [setting, f'$10^{{-{noise_level}}}$', steps, absolute_loss,
+                            df.loc[df.shape[0]] = [setting, f'$\mathregular{{10^{{-{noise_level}}}}}$',
+                                                   steps, absolute_loss,
                                                    time_to_vergence[setting][noise_level],
                                                    time_as_fixpoint[setting][noise_level]]
                     pbar.update(1)
@@ -171,12 +172,12 @@ class RobustnessComparisonExperiment:
                                                  var_name="Measurement",
                                                  value_name="Steps").sort_values('Noise Level')
         # Plotting
-        plt.rcParams.update({
-            "text.usetex": True,
-            "font.family": "sans-serif",
-            "font.size": 12,
-            "font.weight": 'bold',
-            "font.sans-serif": ["Helvetica"]})
+        # plt.rcParams.update({
+        #    "text.usetex": True,
+        #    "font.family": "sans-serif",
+        #    "font.size": 12,
+        #    "font.weight": 'bold',
+        #    "font.sans-serif": ["Helvetica"]})
         sns.set(style='whitegrid', font_scale=2)
         bf = sns.boxplot(data=df_melted, y='Steps', x='Noise Level', hue='Measurement', palette=PALETTE)
         synthetic = 'synthetic' if self.is_synthetic else 'natural'
@@ -191,7 +192,7 @@ class RobustnessComparisonExperiment:
         plt.savefig(str(filepath))
 
         if print_it:
-            col_headers = [str(f"10e-{d}") for d in range(noise_levels)]
+            col_headers = [str(f"1e-{d}") for d in range(noise_levels)]
 
             print(f"\nAppplications steps until divergence / zero: ")
             # print(tabulate(time_to_vergence, showindex=row_headers, headers=col_headers, tablefmt='orgtbl'))
