@@ -216,7 +216,7 @@ class SoupSpawnExperiment:
 
                 df.loc[len(df)] = [clone.name, net.name, MAE_pre, 0, MSE_pre, 0, MIM_pre, 0, self.noise, ""]
 
-                net.children.append(clone)
+                net.child_nets.append(clone)
                 self.clones.append(clone)
                 self.parents_with_clones.append(clone)
 
@@ -229,8 +229,8 @@ class SoupSpawnExperiment:
             net_input_data = net.input_weight_matrix()
             net_target_data = net.create_target_weights(net_input_data)
 
-            for j in range(len(net.children)):
-                clone = net.children[j]
+            for j in range(len(net.child_nets)):
+                clone = net.child_nets[j]
 
                 # Post Training distances for comparison
                 clone_post_weights = clone.create_target_weights(clone.input_weight_matrix())
