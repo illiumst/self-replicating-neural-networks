@@ -1,5 +1,4 @@
-""" ----------------------------------------- Methods for summarizing the experiments ------------------------------------------ """
-import os
+""" -------------------------------- Methods for summarizing the experiments --------------------------------- """
 from pathlib import Path
 
 from visualization import line_chart_fixpoints, bar_chart_fixpoints
@@ -52,7 +51,9 @@ def summary_fixpoint_percentage(runs, epochs, fixpoints_percentages, ST_steps, S
         line_chart_fixpoints(fixpoints_percentages, epochs, ST_steps, SA_steps, directory_name, population_size)
 
 
-""" --------------------------------------------------- Miscellaneous ---------------------------------------------------------- """
+""" -------------------------------------------- Miscellaneous --------------------------------------------------- """
+
+
 def check_folder(experiment_folder: str):
     exp_path = Path('experiments') / experiment_folder
     exp_path.mkdir(parents=True, exist_ok=True)

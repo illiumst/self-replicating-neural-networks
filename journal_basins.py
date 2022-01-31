@@ -26,11 +26,14 @@ def l1(tup):
 
 
 def mean_invariate_manhattan_distance(x, y):
-    # One of these one-liners that might be smart or really dumb. Goal is to find pairwise 
-    # distances of ascending values, ie. sum (abs(min1_X-min1_Y), abs(min2_X-min2Y) ...) / mean.  
+    # One of these one-liners that might be smart or really dumb. Goal is to find pairwise
+    # distances of ascending values, ie. sum (abs(min1_X-min1_Y), abs(min2_X-min2Y) ...) / mean.
     # Idea was to find weight sets that have same values but just in different positions, that would
     # make this distance 0.
-    return np.mean(list(map(l1, zip(sorted(x.numpy()), sorted(y.numpy())))))
+    try:
+        return np.mean(list(map(l1, zip(sorted(x.detach().numpy()), sorted(y.detach().numpy())))))
+    except AttributeError:
+        return np.mean(list(map(l1, zip(sorted(x.numpy()), sorted(y.numpy())))))
 
 
 def distance_matrix(nets, distance="MIM", print_it=True):

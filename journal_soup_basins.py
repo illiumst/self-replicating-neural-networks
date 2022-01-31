@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import mean_absolute_error as MAE
 from sklearn.metrics import mean_squared_error as MSE
@@ -16,6 +17,7 @@ from tqdm import tqdm
 
 from functionalities_test import is_identity_function, test_status, is_zero_fixpoint, is_divergent, \
     is_secondary_fixpoint
+from journal_basins import mean_invariate_manhattan_distance
 from network import Net
 from visualization import plot_loss, plot_3d_soup
 
@@ -23,14 +25,6 @@ from visualization import plot_loss, plot_3d_soup
 def l1(tup):
     a, b = tup
     return abs(a - b)
-
-
-def mean_invariate_manhattan_distance(x, y):
-    # One of these one-liners that might be smart or really dumb. Goal is to find pairwise
-    # distances of ascending values, ie. sum (abs(min1_X-min1_Y), abs(min2_X-min2Y) ...) / mean.
-    # Idea was to find weight sets that have same values but just in different positions, that would
-    # make this distance 0.
-    return np.mean(list(map(l1, zip(sorted(x.numpy()), sorted(y.numpy())))))
 
 
 def distance_matrix(nets, distance="MIM", print_it=True):

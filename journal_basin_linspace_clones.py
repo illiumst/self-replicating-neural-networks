@@ -6,7 +6,6 @@ import pickle
 import pandas as pd
 import numpy as np
 import torch
-from sklearn import preprocessing
 
 from functionalities_test import is_identity_function, test_status
 from journal_basins import SpawnExperiment, mean_invariate_manhattan_distance
@@ -22,8 +21,11 @@ class SpawnLinspaceExperiment(SpawnExperiment):
         number_clones = number_clones or self.nr_clones
 
         df = pd.DataFrame(
-            columns=['clone', 'parent', 'parent2', 'MAE_pre', 'MAE_post', 'MSE_pre', 'MSE_post', 'MIM_pre', 'MIM_post', 'noise',
-                     'status_pst'])
+            columns=['clone', 'parent', 'parent2',
+                     'MAE_pre', 'MAE_post',
+                     'MSE_pre', 'MSE_post',
+                     'MIM_pre', 'MIM_post',
+                     'noise', 'status_pst'])
 
         # For every initial net {i} after populating (that is fixpoint after first epoch);
         # parent = self.parents[0]
@@ -38,15 +40,15 @@ class SpawnLinspaceExperiment(SpawnExperiment):
             # to see full trajectory (but the clones will be very hard to see).
             # Make one target to compare distances to clones later when they have trained.
             net1.start_time = self.ST_steps - 150
-            net1_input_data = net1.input_weight_matrix()
-            net1_target_data = net1.create_target_weights(net1_input_data)
+            net1_input_data = net1.input_weight_matrix().detach()
+            net1_target_data = net1.create_target_weights(net1_input_data).detach()
 
             net2.start_time = self.ST_steps - 150
-            net2_input_data = net2.input_weight_matrix()
-            net2_target_data = net2.create_target_weights(net2_input_data)
+            net2_input_data = net2.input_weight_matrix().detach()
+            net2_target_data = net2.create_target_weights(net2_input_data).detach()
 
             if is_identity_function(net1) and is_identity_function(net2):
-            # if True:
+                # if True:
                 # Clone the fixpoint x times and add (+-)self.noise to weight-sets randomly;
                 # To plot clones starting after first epoch (z=ST_steps), set that as start_time!
                 # To make sure PCA will plot the same trajectory up until this point, we clone the
@@ -64,7 +66,7 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                     clone.number_trained = copy.deepcopy(net1.number_trained)
 
                     # Pre Training distances (after noise application of course)
-                    clone_pre_weights = clone.create_target_weights(clone.input_weight_matrix())
+                    clone_pre_weights = clone.create_target_weights(clone.input_weight_matrix()).detach()
                     MAE_pre = MAE(net1_target_data, clone_pre_weights)
                     MSE_pre = MSE(net1_target_data, clone_pre_weights)
                     MIM_pre = mean_invariate_manhattan_distance(net1_target_data, clone_pre_weights)
@@ -78,10 +80,15 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                                     raise ValueError
                     except ValueError:
                         print("Ran into nan in 'in beetween weights' array.")
+                        df.loc[len(df)] = [j, net1.name, net2.name,
+                                           MAE_pre, 0,
+                                           MSE_pre, 0,
+                                           MIM_pre, 0,
+                                           self.noise, clone.is_fixpoint]
                         continue
 
                     # Post Training distances for comparison
-                    clone_post_weights = clone.create_target_weights(clone.input_weight_matrix())
+                    clone_post_weights = clone.create_target_weights(clone.input_weight_matrix()).detach()
                     MAE_post = MAE(net1_target_data, clone_post_weights)
                     MSE_post = MSE(net1_target_data, clone_post_weights)
                     MIM_post = mean_invariate_manhattan_distance(net1_target_data, clone_post_weights)
@@ -95,16 +102,23 @@ class SpawnLinspaceExperiment(SpawnExperiment):
                               f"\nMIM({net1.name},{j}): {MIM_post}\n")
                         self.nets.append(clone)
 
-                    df.loc[len(df)] = [j, net1.name, net2.name, MAE_pre, MAE_post, MSE_pre, MSE_post, MIM_pre, MIM_post,
-                                          self.noise, clone.is_fixpoint]
+                    df.loc[len(df)] = [j, net1.name, net2.name,
+                                       MAE_pre, MAE_post,
+                                       MSE_pre, MSE_post,
+                                       MIM_pre, MIM_post,
+                                       self.noise, clone.is_fixpoint]
 
         for net1, net2 in pairwise_net_list:
-            value = 'MAE'
-            c_selector = [f'{value}_pre', f'{value}_post']
-            values = df.loc[(df['parent'] == net1.name) & (df['parent2'] == net2.name)][c_selector]
-            this_min, this_max = values.values.min(), values.values.max()
-            df.loc[(df['parent'] == net1.name) &
-                   (df['parent2'] == net2.name), c_selector] = (values - this_min) / (this_max - this_min)
+            try:
+                value = 'MAE'
+                c_selector = [f'{value}_pre', f'{value}_post']
+                values = df.loc[(df['parent'] == net1.name) & (df['parent2'] == net2.name)][c_selector]
+                this_min, this_max = values.values.min(), values.values.max()
+                df.loc[(df['parent'] == net1.name) &
+                       (df['parent2'] == net2.name), c_selector] = (values - this_min) / (this_max - this_min)
+            except ValueError:
+                pass
+
         for parent in self.parents:
             for _ in range(self.epochs - 1):
                 for _ in range(self.ST_steps):
@@ -148,7 +162,8 @@ if __name__ == '__main__':
     df = exp.df
 
     directory = Path('output') / 'spawn_basin' / f'{ST_name_hash}' / 'linage'
-    pickle.dump(exp, open(f"{directory}/experiment_pickle_{ST_name_hash}.p", "wb"))
+    with (directory / f"experiment_pickle_{ST_name_hash}.p").open('wb') as f:
+        pickle.dump(exp, f)
     print(f"\nSaved experiment to {directory}.")
 
     # Boxplot with counts of nr_fixpoints, nr_other, nr_etc. on y-axis
@@ -183,6 +198,6 @@ if __name__ == '__main__':
     #    else:
     #        label.set_visible(False)
 
-    filepath = exp.directory / 'mim_dist_plot.png'
+    filepath = exp.directory / 'mim_dist_plot.pdf'
     plt.tight_layout()
-    plt.savefig(filepath)
+    plt.savefig(filepath, dpi=600, format='pdf', bbox_inches='tight')
