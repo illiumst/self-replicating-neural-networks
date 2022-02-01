@@ -3,3 +3,4 @@ from .robustness_exp import run_robustness_experiment
 from .self_application_exp import run_SA_experiment
 from .self_train_exp import run_ST_experiment
 from .soup_exp import run_soup_experiment
+import functionalities_test
