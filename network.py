@@ -296,7 +296,7 @@ class MetaCell(nn.Module):
         self.name = name
         self.interface = interface
         self.weight_interface = 5
-        self.net_hidden_size = 4
+        self.net_hidden_size = 3
         self.net_ouput_size = 1
         self.meta_weight_list = nn.ModuleList()
         self.meta_weight_list.extend(
@@ -413,22 +413,38 @@ class MetaNet(nn.Module):
     def particles(self):
         return (cell for metalayer in self._meta_layer_list for cell in metalayer.particles)
 
-    def combined_self_train(self, external_optimizer):
+    def combined_self_train(self):
         losses = []
         for particle in self.particles:
-            # Zero your gradients for every batch!
-            external_optimizer.zero_grad()
             # Intergrate optimizer and backward function
             input_data = particle.input_weight_matrix()
             target_data = particle.create_target_weights(input_data)
             output = particle(input_data)
-            loss = F.mse_loss(output, target_data)
-            losses.append(loss.detach)
-            loss.backward()
-            # Adjust learning weights
-            external_optimizer.step()
-        # return torch.hstack(losses).sum(dim=-1, keepdim=True)
-        return sum(losses)
+            losses.append(F.mse_loss(output, target_data))
+        return torch.hstack(losses).sum(dim=-1, keepdim=True)
+
+
+class MetaNetCompareBaseline(nn.Module):
+
+    def __init__(self, interface=4, depth=3, width=4, out=1, activation=None):
+        super().__init__()
+        self.activation = activation
+        self.out = out
+        self.interface = interface
+        self.width = width
+        self.depth = depth
+
+        self._meta_layer_list = nn.ModuleList()
+
+        self._meta_layer_list.append(nn.Linear(self.interface, self.width, bias=False))
+        self._meta_layer_list.extend([ nn.Linear(self.width, self.width, bias=False) for _ in range(self.depth - 2)])
+        self._meta_layer_list.append(nn.Linear(self.width, self.out, bias=False))
+
+    def forward(self, x):
+        tensor = x
+        for meta_layer in self._meta_layer_list:
+            tensor = meta_layer(tensor)
+        return tensor
 
 
 if __name__ == '__main__':
