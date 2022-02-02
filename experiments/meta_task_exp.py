@@ -117,8 +117,11 @@ def validate(checkpoint_path, ratio=0.1):
     return acc
 
 
-def new_train_storage_df():
-    return pd.DataFrame(columns=['Epoch', 'Batch', 'Metric', 'Score'])
+def new_storage_df(identifier, weight_count):
+    if identifier == 'train':
+        return pd.DataFrame(columns=['Epoch', 'Batch', 'Metric', 'Score'])
+    elif identifier == 'weights':
+        return pd.DataFrame(columns=['Epoch', 'Weight', *(f'weight_{x}' for x in range(weight_count))])
 
 
 def checkpoint_and_validate(model, out_path, epoch_n, final_model=False):
@@ -163,8 +166,8 @@ def plot_training_result(path_to_dataframe):
 
 if __name__ == '__main__':
 
-    self_train = False
-    training = False
+    self_train = True
+    training = True
     plotting = True
     particle_analysis = True
     as_sparse_network_test = True
@@ -172,9 +175,10 @@ if __name__ == '__main__':
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)
 
-    run_path = Path('output') / 'mnist_self_train_100_NEW_STYLE'
+    run_path = Path('output') / 'mn_st_smaller'
     model_path = run_path / '0000_trained_model.zip'
     df_store_path = run_path / 'train_store.csv'
+    weight_store_path = run_path / 'weight_store.csv'
 
     if training:
         utility_transforms = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0)])
@@ -186,11 +190,13 @@ if __name__ == '__main__':
 
         interface = np.prod(dataset[0][0].shape)
         metanet = MetaNet(interface, depth=5, width=6, out=10).to(DEVICE)
+        meta_weight_count = sum(p.numel() for p in next(metanet.particles).parameters())
 
         loss_fn = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(metanet.parameters(), lr=0.008, momentum=0.9)
 
-        train_store = new_train_storage_df()
+        train_store = new_storage_df('train', None)
+        weight_store = new_storage_df('train', meta_weight_count)
         for epoch in tqdm(range(EPOCH), desc='MetaNet Train - Epochs'):
             is_validation_epoch = epoch % VALIDATION_FRQ == 0 if not debug else True
             is_self_train_epoch = epoch % SELF_TRAIN_FRQ == 0 if not debug else True
@@ -247,16 +253,24 @@ if __name__ == '__main__':
                     for key, value in dict(counter_dict).items():
                         step_log = dict(Epoch=int(epoch), Batch=BATCHSIZE, Metric=key, Score=value)
                         train_store.loc[train_store.shape[0]] = step_log
+                for particle in metanet.particles:
+                    weight_log = (epoch, particle.name, *(x for y in particle.parameters() for x in y))
                 train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists())
-                # train_store = new_train_storage_df()
+                weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists())
+                train_store = new_storage_df('train', None)
+                weight_store = new_storage_df('train', meta_weight_count)
 
         metanet.eval()
         accuracy = checkpoint_and_validate(metanet, run_path, EPOCH, final_model=True)
         validation_log = dict(Epoch=EPOCH, Batch=BATCHSIZE,
                               Metric='Test Accuracy', Score=accuracy.item())
+        for particle in metanet.particles:
+            weight_log = (EPOCH, particle.name, *(x for y in particle.parameters() for x in y))
+            weight_store.loc[weight_store.shape[0]] = weight_log
 
         train_store.loc[train_store.shape[0]] = validation_log
-        train_store.to_csv(df_store_path)
+        train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists())
+        weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists())
 
     if plotting:
         plot_training_result(df_store_path)
