@@ -133,7 +133,7 @@ def checkpoint_and_validate(model, out_path, epoch_n, final_model=False):
 
 def plot_training_result(path_to_dataframe):
     # load from Drive
-    df = pd.read_csv(path_to_dataframe, index_col=0)
+    df = pd.read_csv(path_to_dataframe, index_col=False)
 
     # Set up figure
     fig, ax1 = plt.subplots()  # initializes figure and plots
@@ -163,6 +163,9 @@ def plot_training_result(path_to_dataframe):
     else:
         plt.savefig(Path(path_to_dataframe.parent / 'training_lineplot.png'), dpi=300)
 
+def flat_for_store(parameters):
+    return (x.item() for y in parameters for x in y.detach().flatten())
+
 
 if __name__ == '__main__':
 
@@ -175,7 +178,7 @@ if __name__ == '__main__':
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)
 
-    run_path = Path('output') / 'mn_st_smaller'
+    run_path = Path('output') / 'mn_st_NoRes'
     model_path = run_path / '0000_trained_model.zip'
     df_store_path = run_path / 'train_store.csv'
     weight_store_path = run_path / 'weight_store.csv'
@@ -189,14 +192,14 @@ if __name__ == '__main__':
         d = DataLoader(dataset, batch_size=BATCHSIZE, shuffle=True, drop_last=True, num_workers=WORKER)
 
         interface = np.prod(dataset[0][0].shape)
-        metanet = MetaNet(interface, depth=5, width=6, out=10).to(DEVICE)
+        metanet = MetaNet(interface, depth=5, width=6, out=10, residual_skip=False).to(DEVICE)
         meta_weight_count = sum(p.numel() for p in next(metanet.particles).parameters())
 
         loss_fn = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(metanet.parameters(), lr=0.008, momentum=0.9)
 
         train_store = new_storage_df('train', None)
-        weight_store = new_storage_df('train', meta_weight_count)
+        weight_store = new_storage_df('weights', meta_weight_count)
         for epoch in tqdm(range(EPOCH), desc='MetaNet Train - Epochs'):
             is_validation_epoch = epoch % VALIDATION_FRQ == 0 if not debug else True
             is_self_train_epoch = epoch % SELF_TRAIN_FRQ == 0 if not debug else True
@@ -254,29 +257,30 @@ if __name__ == '__main__':
                         step_log = dict(Epoch=int(epoch), Batch=BATCHSIZE, Metric=key, Score=value)
                         train_store.loc[train_store.shape[0]] = step_log
                 for particle in metanet.particles:
-                    weight_log = (epoch, particle.name, *(x for y in particle.parameters() for x in y))
-                train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists())
-                weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists())
+                    weight_log = (epoch, particle.name, *flat_for_store(particle.parameters()))
+                    weight_store.loc[weight_store.shape[0]] = weight_log
+                train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists(), index=False)
+                weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists(), index=False)
                 train_store = new_storage_df('train', None)
-                weight_store = new_storage_df('train', meta_weight_count)
+                weight_store = new_storage_df('weights', meta_weight_count)
 
         metanet.eval()
         accuracy = checkpoint_and_validate(metanet, run_path, EPOCH, final_model=True)
         validation_log = dict(Epoch=EPOCH, Batch=BATCHSIZE,
                               Metric='Test Accuracy', Score=accuracy.item())
         for particle in metanet.particles:
-            weight_log = (EPOCH, particle.name, *(x for y in particle.parameters() for x in y))
+            weight_log = (EPOCH, particle.name, *(flat_for_store(particle.parameters())))
             weight_store.loc[weight_store.shape[0]] = weight_log
 
         train_store.loc[train_store.shape[0]] = validation_log
-        train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists())
-        weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists())
+        train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists(), index=False)
+        weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists(), index=False)
 
     if plotting:
         plot_training_result(df_store_path)
 
     if particle_analysis:
-        model_path = next(run_path.glob(f'*e{EPOCH}.tp'))
+        model_path = next(run_path.glob(f'*e100.tp'))
         latest_model = torch.load(model_path, map_location=DEVICE).eval()
         counter_dict = defaultdict(lambda: 0)
         _ = test_for_fixpoints(counter_dict, list(latest_model.particles))
@@ -284,10 +288,38 @@ if __name__ == '__main__':
         zero_ident = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero('identity_func')
         zero_other = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero('other_func')
         if as_sparse_network_test:
-            acc_pre = validate(model_path, ratio=1)
+            acc_pre = validate(model_path, ratio=0.01).item()
             ident_ckpt = set_checkpoint(zero_ident, model_path.parent, -1, final_model=True)
-            ident_acc_post = validate(ident_ckpt, ratio=1)
+            ident_acc_post = validate(ident_ckpt, ratio=0.01).item()
             tqdm.write(f'Zero_ident diff = {abs(ident_acc_post-acc_pre)}')
             other_ckpt = set_checkpoint(zero_other, model_path.parent, -2, final_model=True)
-            other_acc_post = validate(other_ckpt, ratio=1)
+            other_acc_post = validate(other_ckpt, ratio=0.01).item()
             tqdm.write(f'Zero_other diff = {abs(other_acc_post - acc_pre)}')
+
+            if plotting:
+                plt.clf()
+                fig, ax = plt.subplots(ncols=2)
+                data = [acc_pre, ident_acc_post, other_acc_post]
+                labels = ['Full Network', 'Sparse, No Identity', 'Sparse, No Other']
+                for idx, (score, name) in enumerate(zip(data, labels)):
+                    l = sns.barplot(y=[score], x=['Networks'], color=sns.color_palette()[idx], label=name, ax=ax[0])
+                # noinspection PyUnboundLocalVariable
+                for idx, patch in enumerate(l.patches):
+                    if idx != 0:
+                        # we recenter the bar
+                        patch.set_x(patch.get_x() + idx * 0.035)
+
+                ax[0].set_title('Accuracy after particle dropout')
+                ax[0].set_xlabel('Accuracy')
+                # ax[0].legend()
+
+                counter_dict['full_network'] = sum(counter_dict.values())
+                ax[1].pie(counter_dict.values(), labels=counter_dict.keys(), colors=sns.color_palette()[:3], )
+                ax[1].set_title('Particle Count for ')
+                # ax[1].set_xlabel('')
+
+                plt.tight_layout()
+                if debug:
+                    plt.show()
+                else:
+                    plt.savefig(Path(run_path / 'dropout_stacked_barplot.png'), dpi=300)

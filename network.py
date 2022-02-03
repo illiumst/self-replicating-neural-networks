@@ -296,7 +296,7 @@ class MetaCell(nn.Module):
         self.name = name
         self.interface = interface
         self.weight_interface = 5
-        self.net_hidden_size = 3
+        self.net_hidden_size = 4
         self.net_ouput_size = 1
         self.meta_weight_list = nn.ModuleList()
         self.meta_weight_list.extend(
@@ -371,7 +371,7 @@ class MetaLayer(nn.Module):
 
 class MetaNet(nn.Module):
 
-    def __init__(self, interface=4, depth=3, width=4, out=1, activation=None):
+    def __init__(self, interface=4, depth=3, width=4, out=1, activation=None, residual_skip=True):
         super().__init__()
         self.activation = activation
         self.out = out
@@ -382,14 +382,14 @@ class MetaNet(nn.Module):
         self._meta_layer_list = nn.ModuleList()
         self._meta_layer_list.append(MetaLayer(name=f'L{0}',
                                                interface=self.interface,
-                                               width=self.width)
+                                               width=self.width, residual_skip=residual_skip)
                                      )
         self._meta_layer_list.extend([MetaLayer(name=f'L{layer_idx + 1}',
-                                                interface=self.width, width=self.width
+                                                interface=self.width, width=self.width, residual_skip=residual_skip
                                                 ) for layer_idx in range(self.depth - 2)]
                                      )
         self._meta_layer_list.append(MetaLayer(name=f'L{len(self._meta_layer_list)}',
-                                               interface=self.width, width=self.out)
+                                               interface=self.width, width=self.out, residual_skip=residual_skip)
                                      )
 
     def replace_with_zero(self, ident_key):

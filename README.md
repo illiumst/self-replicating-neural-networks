@@ -31,10 +31,15 @@
 
 ### Tasks für Steffen:
 
-- [ ] Training mit kleineren GNs -| Running
+- [x] Training mit kleineren GNs
+  - Accuracy leidet enorm (_0.56_)
+    ![image info](./figures/training_lineplot.png)
+  - Es entstehen mehr SRNN
+  - Der Dropout Effekt wird stärker (diff_ohne_SRNN = _0.0_)
+    ![image info](./figures/dropout_stacked_barplot.png)
 - [ ] Weiter Trainieren -> 500 Epochs?
 - [ ] Loss Gewichtung anpassen
-- [ ] Training ohne Residual Skip Connection
+- [ ] Training ohne Residual Skip Connection | - Running
 - [ ] Test mit Baseline Dense Network 
   - [ ] mit vergleichbaren Neuron Count
   - [ ] mit gesamt Weight Count
