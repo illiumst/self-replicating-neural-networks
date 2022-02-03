@@ -33,13 +33,16 @@
 
 - [x] Training mit kleineren GNs
   - Accuracy leidet enorm (_0.56_)
-    ![image info](./figures/training_lineplot.png)
+    ![image info](./figures/lesser_neurons_training_lineplot.png)
   - Es entstehen mehr SRNN
   - Der Dropout Effekt wird stärker (diff_ohne_SRNN = _0.0_)
-    ![image info](./figures/dropout_stacked_barplot.png)
+    ![image info](./figures/lesser_neurons_dropout_stacked_barplot.png)
 - [ ] Weiter Trainieren -> 500 Epochs?
 - [ ] Loss Gewichtung anpassen
-- [ ] Training ohne Residual Skip Connection | - Running
+- [x] Training ohne Residual Skip Connection
+  - Ist kacke
+  ![image info](./figures/no_res_training_lineplot.png)
+  ![image info](./figures/no_res_dropout_stacked_barplot.png)
 - [ ] Test mit Baseline Dense Network 
   - [ ] mit vergleichbaren Neuron Count
   - [ ] mit gesamt Weight Count
