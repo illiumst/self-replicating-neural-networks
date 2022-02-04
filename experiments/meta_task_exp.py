@@ -37,11 +37,11 @@ else:
         pass
 
 from network import MetaNet
-from functionalities_test import test_for_fixpoints
+from functionalities_test import test_for_fixpoints, FixTypes
 
 WORKER = 10 if not debug else 2
 BATCHSIZE = 500 if not debug else 50
-EPOCH = 100 if not debug else 3
+EPOCH = 400 if not debug else 3
 VALIDATION_FRQ = 5 if not debug else 1
 SELF_TRAIN_FRQ = 1 if not debug else 1
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -131,7 +131,30 @@ def checkpoint_and_validate(model, out_path, epoch_n, final_model=False):
     return result
 
 
+def plot_training_particle_types(path_to_dataframe):
+    plt.clf()
+    # load from Drive
+    df = pd.read_csv(path_to_dataframe, index_col=False)
+    # Set up figure
+    fig, ax = plt.subplots()  # initializes figure and plots
+    data = df[df['Metric'].isin(FixTypes.all_types())]
+    fix_types = data['Metric'].unique()
+    data = data.pivot(index='Epoch', columns='Metric', values='Score').reset_index().fillna(0)
+    _ = plt.stackplot(data['Epoch'], *[data[fixtype] for fixtype in fix_types], labels=fix_types.tolist())
+
+    ax.set(ylabel='Particle Count', xlabel='Epoch')
+    ax.set_title('Particle Type Count')
+
+    fig.legend(loc="center right", title='Particle Type', bbox_to_anchor=(0.85, 0.5))
+    plt.tight_layout()
+    if debug:
+        plt.show()
+    else:
+        plt.savefig(Path(path_to_dataframe.parent / 'training_particle_type_lp.png'), dpi=300)
+
+
 def plot_training_result(path_to_dataframe):
+    plt.clf()
     # load from Drive
     df = pd.read_csv(path_to_dataframe, index_col=False)
 
@@ -163,6 +186,7 @@ def plot_training_result(path_to_dataframe):
     else:
         plt.savefig(Path(path_to_dataframe.parent / 'training_lineplot.png'), dpi=300)
 
+
 def flat_for_store(parameters):
     return (x.item() for y in parameters for x in y.detach().flatten())
 
@@ -170,7 +194,7 @@ def flat_for_store(parameters):
 if __name__ == '__main__':
 
     self_train = True
-    training = True
+    training = False
     plotting = True
     particle_analysis = True
     as_sparse_network_test = True
@@ -265,6 +289,13 @@ if __name__ == '__main__':
                 weight_store = new_storage_df('weights', meta_weight_count)
 
         metanet.eval()
+        if particle_analysis:
+            counter_dict = defaultdict(lambda: 0)
+            # This returns ID-functions
+            _ = test_for_fixpoints(counter_dict, list(metanet.particles))
+            for key, value in dict(counter_dict).items():
+                step_log = dict(Epoch=int(EPOCH), Batch=BATCHSIZE, Metric=key, Score=value)
+                train_store.loc[train_store.shape[0]] = step_log
         accuracy = checkpoint_and_validate(metanet, run_path, EPOCH, final_model=True)
         validation_log = dict(Epoch=EPOCH, Batch=BATCHSIZE,
                               Metric='Test Accuracy', Score=accuracy.item())
@@ -278,33 +309,35 @@ if __name__ == '__main__':
 
     if plotting:
         plot_training_result(df_store_path)
-
+        if particle_analysis:
+            plot_training_particle_types(df_store_path)
+    exit()
     if particle_analysis:
-        model_path = next(run_path.glob(f'*e100.tp'))
+        model_path = next(run_path.glob(f'*e{EPOCH}.tp'))
         latest_model = torch.load(model_path, map_location=DEVICE).eval()
         counter_dict = defaultdict(lambda: 0)
         _ = test_for_fixpoints(counter_dict, list(latest_model.particles))
         tqdm.write(str(dict(counter_dict)))
-        zero_ident = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero('identity_func')
-        zero_other = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero('other_func')
+
         if as_sparse_network_test:
-            acc_pre = validate(model_path, ratio=0.01).item()
-            ident_ckpt = set_checkpoint(zero_ident, model_path.parent, -1, final_model=True)
-            ident_acc_post = validate(ident_ckpt, ratio=0.01).item()
-            tqdm.write(f'Zero_ident diff = {abs(ident_acc_post-acc_pre)}')
-            other_ckpt = set_checkpoint(zero_other, model_path.parent, -2, final_model=True)
-            other_acc_post = validate(other_ckpt, ratio=0.01).item()
-            tqdm.write(f'Zero_other diff = {abs(other_acc_post - acc_pre)}')
+            acc_pre = validate(model_path, ratio=1).item()
+            diff_table = pd.DataFrame(columns=['Particle Type', 'Accuracy', 'Diff'])
+            for fixpoint_type in FixTypes.all_types():
+                new_model = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero(fixpoint_type)
+                new_ckpt = set_checkpoint(new_model, model_path.parent, fixpoint_type, final_model=True)
+                acc_post = validate(new_ckpt, ratio=1).item()
+                acc_diff = abs(acc_post-acc_pre)
+                tqdm.write(f'Zero_ident diff = {acc_diff}')
+                diff_table.iloc[diff_table.shape[0]] = (fixpoint_type, acc_post, acc_diff)
 
             if plotting:
                 plt.clf()
                 fig, ax = plt.subplots(ncols=2)
-                data = [acc_pre, ident_acc_post, other_acc_post]
                 labels = ['Full Network', 'Sparse, No Identity', 'Sparse, No Other']
-                for idx, (score, name) in enumerate(zip(data, labels)):
-                    l = sns.barplot(y=[score], x=['Networks'], color=sns.color_palette()[idx], label=name, ax=ax[0])
+                barplot = sns.barplot(data=diff_table, y='Accurady', x=['Particle Type'],
+                                      color=sns.color_palette()[:diff_table.shape[0]], ax=ax[0])
                 # noinspection PyUnboundLocalVariable
-                for idx, patch in enumerate(l.patches):
+                for idx, patch in enumerate(barplot.patches):
                     if idx != 0:
                         # we recenter the bar
                         patch.set_x(patch.get_x() + idx * 0.035)
@@ -313,7 +346,6 @@ if __name__ == '__main__':
                 ax[0].set_xlabel('Accuracy')
                 # ax[0].legend()
 
-                counter_dict['full_network'] = sum(counter_dict.values())
                 ax[1].pie(counter_dict.values(), labels=counter_dict.keys(), colors=sns.color_palette()[:3], )
                 ax[1].set_title('Particle Count for ')
                 # ax[1].set_xlabel('')

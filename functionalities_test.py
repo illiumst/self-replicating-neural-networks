@@ -6,6 +6,19 @@ from tqdm import tqdm
 from network import Net
 
 
+class FixTypes:
+
+    divergent       = 'divergent'
+    fix_zero        = 'fix_zero'
+    identity_func   = 'identity_func'
+    fix_sec         = 'fix_sec'
+    other_func      = 'other_func'
+
+    @classmethod
+    def all_types(cls):
+        return [val for key, val in cls.__dict__.items() if isinstance(val, str) and not key.startswith('_')]
+
+
 def is_divergent(network: Net) -> bool:
     return network.input_weight_matrix().isinf().any().item() or network.input_weight_matrix().isnan().any().item()
 
@@ -15,7 +28,6 @@ def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
     input_data = network.input_weight_matrix()
     target_data = network.create_target_weights(input_data)
     predicted_values = network(input_data)
-
 
     return torch.allclose(target_data.detach(), predicted_values.detach(),
                           rtol=0, atol=epsilon)
@@ -57,21 +69,21 @@ def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
 
     for net in tqdm(nets, desc='Fixpoint Tester', total=len(nets)):
         if is_divergent(net):
-            fixpoint_counter["divergent"] += 1
-            net.is_fixpoint = "divergent"
+            fixpoint_counter[FixTypes.divergent] += 1
+            net.is_fixpoint = FixTypes.divergent
         elif is_identity_function(net):  # is default value
-            fixpoint_counter["identity_func"] += 1
-            net.is_fixpoint = "identity_func"
+            fixpoint_counter[FixTypes.identity_func] += 1
+            net.is_fixpoint = FixTypes.identity_func
             id_functions.append(net)
         elif is_zero_fixpoint(net):
-            fixpoint_counter["fix_zero"] += 1
-            net.is_fixpoint = "fix_zero"
+            fixpoint_counter[FixTypes.fix_zero] += 1
+            net.is_fixpoint = FixTypes.fix_zero
         elif is_secondary_fixpoint(net):
-            fixpoint_counter["fix_sec"] += 1
-            net.is_fixpoint = "fix_sec"
+            fixpoint_counter[FixTypes.fix_sec] += 1
+            net.is_fixpoint = FixTypes.fix_sec
         else:
-            fixpoint_counter["other_func"] += 1
-            net.is_fixpoint = "other_func"
+            fixpoint_counter[FixTypes.other_func] += 1
+            net.is_fixpoint = FixTypes.other_func
     return id_functions
 
 
@@ -82,14 +94,14 @@ def changing_rate(x_new, x_old):
 def test_status(net: Net) -> Net:
 
     if is_divergent(net):
-        net.is_fixpoint = "divergent"
+        net.is_fixpoint = FixTypes.divergent
     elif is_identity_function(net):  # is default value
-        net.is_fixpoint = "identity_func"
+        net.is_fixpoint = FixTypes.identity_func
     elif is_zero_fixpoint(net):
-        net.is_fixpoint = "fix_zero"
+        net.is_fixpoint = FixTypes.fix_zero
     elif is_secondary_fixpoint(net):
-        net.is_fixpoint = "fix_sec"
+        net.is_fixpoint = FixTypes.fix_sec
     else:
-        net.is_fixpoint = "other_func"
+        net.is_fixpoint = FixTypes.other_func
 
     return net

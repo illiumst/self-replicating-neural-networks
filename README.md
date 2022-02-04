@@ -37,7 +37,7 @@
   - Es entstehen mehr SRNN
   - Der Dropout Effekt wird stärker (diff_ohne_SRNN = _0.0_)
     ![image info](./figures/lesser_neurons_dropout_stacked_barplot.png)
-- [ ] Weiter Trainieren -> 500 Epochs?
+- [X] Weiter Trainieren -> 500 Epochs?
 - [ ] Loss Gewichtung anpassen
 - [x] Training ohne Residual Skip Connection
   - Ist kacke
