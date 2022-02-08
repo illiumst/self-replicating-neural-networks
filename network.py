@@ -296,7 +296,7 @@ class MetaCell(nn.Module):
         self.name = name
         self.interface = interface
         self.weight_interface = 5
-        self.net_hidden_size = 4
+        self.net_hidden_size = 8
         self.net_ouput_size = 1
         self.meta_weight_list = nn.ModuleList()
         self.meta_weight_list.extend(
