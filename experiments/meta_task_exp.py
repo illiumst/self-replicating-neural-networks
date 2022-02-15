@@ -203,7 +203,7 @@ if __name__ == '__main__':
     batch_train_beta = 1
     weight_hidden_size = 5
     residual_skip = True
-    dropout = 0.1
+    dropout = 0
 
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)

@@ -423,18 +423,18 @@ class MetaNet(nn.Module):
         return self
 
     def forward(self, x):
-        if self.dropout_layer:
+        if self.dropout != 0:
             x = self.dropout_layer(x)
         tensor = self._meta_layer_first(x)
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            if self.dropout:
+            if self.dropout != 0:
                 tensor = self.dropout_layer(tensor)
             if idx % 2 == 1:
                 x = tensor.clone()
             tensor = meta_layer(tensor)
             if idx % 2 == 0:
                 tensor = tensor + x
-        if self.dropout_layer:
+        if self.dropout != 0:
             x = self.dropout_layer(x)
         tensor = self._meta_layer_last(x)
         return tensor
@@ -482,7 +482,7 @@ class MetaNetCompareBaseline(nn.Module):
 
 
 if __name__ == '__main__':
-    metanet = MetaNet(interface=3, depth=5, width=3, out=1, dropout=0.1, residual_skip=True)
+    metanet = MetaNet(interface=3, depth=5, width=3, out=1, dropout=0.0, residual_skip=True)
     next(metanet.particles).input_weight_matrix()
     metanet(torch.hstack([torch.full((2, 1), 1.0) for _ in range(metanet.interface)]))
     a = metanet.particles
