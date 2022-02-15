@@ -14,7 +14,7 @@ Data Exchange: [Google Drive Folder](***REMOVED***)
   - Übersetung in ein Gewichtsskalar
     - Einbettung in ein Reguläres Netz
 	
-- [ ] Übersetung in ein Explainable AI Framework
+- [ ] Übersetzung in ein Explainable AI Framework
   - Rückschlüsse auf Mikro Netze
 	
 - [ ] Visualiserung

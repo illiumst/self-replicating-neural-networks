@@ -40,6 +40,7 @@ from network import MetaNet
 from functionalities_test import test_for_fixpoints, FixTypes
 
 WORKER = 10 if not debug else 2
+debug = False
 BATCHSIZE = 500 if not debug else 50
 EPOCH = 200
 VALIDATION_FRQ = 5 if not debug else 1
@@ -200,14 +201,22 @@ if __name__ == '__main__':
     as_sparse_network_test = True
     self_train_alpha = 1
     batch_train_beta = 1
+    weight_hidden_size = 5
+    residual_skip = True
+    dropout = 0.1
 
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)
 
-    run_path = Path('output') / 'mn_st_400_2_no_res'
+    st_str = f'{"" if self_train else "no_"}st'
+    res_str = f'{"" if residual_skip else "_no"}_res'
+    dr_str = f'{f"_dr_{dropout}" if dropout != 0 else ""}'
+    run_path = Path('output') / f'mn_{st_str}_{EPOCH}_{weight_hidden_size}{res_str}{dr_str}'
+
     model_path = run_path / '0000_trained_model.zip'
     df_store_path = run_path / 'train_store.csv'
     weight_store_path = run_path / 'weight_store.csv'
+    srnn_parameters = dict()
 
     if training:
         utility_transforms = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0)])
@@ -218,7 +227,9 @@ if __name__ == '__main__':
         d = DataLoader(dataset, batch_size=BATCHSIZE, shuffle=True, drop_last=True, num_workers=WORKER)
 
         interface = np.prod(dataset[0][0].shape)
-        metanet = MetaNet(interface, depth=5, width=6, out=10, residual_skip=False).to(DEVICE)
+        metanet = MetaNet(interface, depth=5, width=6, out=10, residual_skip=residual_skip, dropout=dropout,
+                          weight_hidden_size=weight_hidden_size,
+                          ).to(DEVICE)
         meta_weight_count = sum(p.numel() for p in next(metanet.particles).parameters())
 
         loss_fn = nn.CrossEntropyLoss()
@@ -315,7 +326,13 @@ if __name__ == '__main__':
             plot_training_particle_types(df_store_path)
 
     if particle_analysis:
-        model_path = next(run_path.glob(f'*e{EPOCH}.tp'))
+        try:
+            model_path = next(run_path.glob(f'*e{EPOCH}.tp'))
+        except StopIteration:
+            print('Model pattern did not trigger.')
+            print(f'Search path was: {run_path}:')
+            print(f'Found Models are: {list(run_path.rglob(".tp"))}')
+            exit(1)
         latest_model = torch.load(model_path, map_location=DEVICE).eval()
         counter_dict = defaultdict(lambda: 0)
         _ = test_for_fixpoints(counter_dict, list(latest_model.particles))
@@ -323,21 +340,22 @@ if __name__ == '__main__':
 
         if as_sparse_network_test:
             acc_pre = validate(model_path, ratio=1).item()
-            diff_table = pd.DataFrame(columns=['Particle Type', 'Accuracy', 'Diff'])
+            diff_df = pd.DataFrame(columns=['Particle Type', 'Accuracy', 'Diff'])
             for fixpoint_type in FixTypes.all_types():
                 new_model = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero(fixpoint_type)
-                new_ckpt = set_checkpoint(new_model, model_path.parent, fixpoint_type, final_model=True)
-                acc_post = validate(new_ckpt, ratio=1).item()
-                acc_diff = abs(acc_post-acc_pre)
-                tqdm.write(f'Zero_ident diff = {acc_diff}')
-                diff_table.iloc[diff_table.shape[0]] = (fixpoint_type, acc_post, acc_diff)
+                if [x for x in new_model.particles if x.is_fixpoint == fixpoint_type]:
+                    new_ckpt = set_checkpoint(new_model, model_path.parent, fixpoint_type, final_model=True)
+                    acc_post = validate(new_ckpt, ratio=1).item()
+                    acc_diff = abs(acc_post-acc_pre)
+                    tqdm.write(f'Zero_ident diff = {acc_diff}')
+                    diff_df.loc[diff_df.shape[0]] = (fixpoint_type, acc_post, acc_diff)
 
             if plotting:
                 plt.clf()
                 fig, ax = plt.subplots(ncols=2)
                 labels = ['Full Network', 'Sparse, No Identity', 'Sparse, No Other']
-                barplot = sns.barplot(data=diff_table, y='Accurady', x=['Particle Type'],
-                                      color=sns.color_palette()[:diff_table.shape[0]], ax=ax[0])
+                colors = sns.color_palette()[:diff_df.shape[0]] if diff_df.shape[0] >= 2 else sns.color_palette()[0]
+                barplot = sns.barplot(data=diff_df, y='Accuracy', x='Particle Type', color=colors, ax=ax[0])
                 # noinspection PyUnboundLocalVariable
                 for idx, patch in enumerate(barplot.patches):
                     if idx != 0:
