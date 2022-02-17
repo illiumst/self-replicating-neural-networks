@@ -3,20 +3,7 @@ from typing import Dict, List
 import torch
 from tqdm import tqdm
 
-from network import Net
-
-
-class FixTypes:
-
-    divergent       = 'divergent'
-    fix_zero        = 'fix_zero'
-    identity_func   = 'identity_func'
-    fix_sec         = 'fix_sec'
-    other_func      = 'other_func'
-
-    @classmethod
-    def all_types(cls):
-        return [val for key, val in cls.__dict__.items() if isinstance(val, str) and not key.startswith('_')]
+from network import FixTypes, Net
 
 
 def is_divergent(network: Net) -> bool:

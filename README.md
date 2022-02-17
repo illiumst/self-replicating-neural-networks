@@ -6,7 +6,7 @@ Data Exchange: [Google Drive Folder](***REMOVED***)
 
 ### Fixpoint Tests:
     
-- [ ] Dropout Test 
+- [X] Dropout Test 
   - (Macht das Partikel beim Goal mit oder ist es nur SRN)
   - Zero_ident diff = -00.04999637603759766 %
 	   
@@ -29,6 +29,8 @@ Data Exchange: [Google Drive Folder](***REMOVED***)
   - gits das schon?
   - Hypernetwork?
   - arxiv: 1905.02898
+  - Sparse Networks
+  - Pruning 
 
 ---
 
@@ -42,6 +44,16 @@ Data Exchange: [Google Drive Folder](***REMOVED***)
     | ![](./figures/sanity/sanity_3hidden_xtimesn.png)   | ![](./figures/sanity/sanity_4hidden_xtimesn.png)  |
     | SRNN x*n    6 Neurons              Other_Func      | SRNN x*n    10 Neurons      Other_Func            |
     | ![](./figures/sanity/sanity_6hidden_xtimesn.png)   | ![](./figures/sanity/sanity_10hidden_xtimesn.png) |
+  
+- [ ] Connectivity
+  - Das Netz dünnt sich wirklich aus.
+    
+    |||
+    |---------------------------------------------------|----------------------------------------------------|
+    | 200 Epochs - 4 Neurons - \alpha 100     RES     |                                                           |
+    | ![](./figures/connectivity/training_lineplot.png) | ![](./figures/connectivity/training_particle_type_lp.png) |
+    | OTHER FUNTIONS                                    |                  IDENTITY FUNCTIONS                       |
+    | ![](./figures/connectivity/other.png)             | ![](./figures/connectivity/identity.png)                  |
 
 - [ ] Training mit kleineren GNs
   
@@ -59,6 +71,7 @@ Data Exchange: [Google Drive Folder](***REMOVED***)
 - [ ] Test mit Baseline Dense Network 
   - [ ] mit vergleichbaren Neuron Count
   - [ ] mit gesamt Weight Count
+
 - [ ] Task/Goal statt SRNN-Task
 
 ---

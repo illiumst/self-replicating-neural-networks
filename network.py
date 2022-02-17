@@ -15,6 +15,18 @@ from tqdm import tqdm
 def prng():
     return random.random()
 
+class FixTypes:
+
+    divergent       = 'divergent'
+    fix_zero        = 'fix_zero'
+    identity_func   = 'identity_func'
+    fix_sec         = 'fix_sec'
+    other_func      = 'other_func'
+
+    @classmethod
+    def all_types(cls):
+        return [val for key, val in cls.__dict__.items() if isinstance(val, str) and not key.startswith('_')]
+
 
 class Net(nn.Module):
 
@@ -79,7 +91,7 @@ class Net(nn.Module):
         self.trained = False
         self.number_trained = 0
 
-        self.is_fixpoint = ""
+        self.is_fixpoint = FixTypes.other_func
         self.layers = nn.ModuleList(
             [nn.Linear(i_size, h_size, False),
              nn.Linear(h_size, h_size, False),

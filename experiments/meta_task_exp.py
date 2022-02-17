@@ -17,6 +17,7 @@ from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor, Compose, Resize
 from tqdm import tqdm
 
+
 if platform.node() == 'CarbonX':
     debug = True
     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
@@ -36,8 +37,8 @@ else:
         DIR = None
         pass
 
-from network import MetaNet
-from functionalities_test import test_for_fixpoints, FixTypes
+from network import MetaNet, FixTypes
+from functionalities_test import test_for_fixpoints
 
 WORKER = 10 if not debug else 2
 debug = False
@@ -195,13 +196,14 @@ def flat_for_store(parameters):
 if __name__ == '__main__':
 
     self_train = True
-    training = True
+    training = False
     plotting = True
     particle_analysis = True
     as_sparse_network_test = True
-    self_train_alpha = 1
+    train_to_id_first = False
+    self_train_alpha = 100
     batch_train_beta = 1
-    weight_hidden_size = 5
+    weight_hidden_size = 4
     residual_skip = True
     dropout = 0
 
@@ -209,9 +211,11 @@ if __name__ == '__main__':
     data_path.mkdir(exist_ok=True, parents=True)
 
     st_str = f'{"" if self_train else "no_"}st'
+    a_str = f'_alpha_{self_train_alpha}' if self_train_alpha != 1 else ''
     res_str = f'{"" if residual_skip else "_no"}_res'
     dr_str = f'{f"_dr_{dropout}" if dropout != 0 else ""}'
-    run_path = Path('output') / f'mn_{st_str}_{EPOCH}_{weight_hidden_size}{res_str}{dr_str}'
+    id_str = f'{f"_StToId" if train_to_id_first else ""}'
+    run_path = Path('output') / f'mn_{st_str}_{EPOCH}_{weight_hidden_size}{a_str}{res_str}{dr_str}{id_str}'
 
     model_path = run_path / '0000_trained_model.zip'
     df_store_path = run_path / 'train_store.csv'
@@ -245,8 +249,9 @@ if __name__ == '__main__':
                 metric = torchmetrics.Accuracy()
             else:
                 metric = None
+            init_st = train_to_id_first and all(x.is_fixpoint == FixTypes.identity_func for x in metanet.particles)
             for batch, (batch_x, batch_y) in tqdm(enumerate(d), total=len(d), desc='MetaNet Train - Batch'):
-                if self_train and is_self_train_epoch:
+                if (self_train and is_self_train_epoch) or init_st:
                     # Zero your gradients for every batch!
                     optimizer.zero_grad()
                     self_train_loss = metanet.combined_self_train() * self_train_alpha
@@ -255,44 +260,46 @@ if __name__ == '__main__':
                     optimizer.step()
                     step_log = dict(Epoch=epoch, Batch=batch, Metric='Self Train Loss', Score=self_train_loss.item())
                     train_store.loc[train_store.shape[0]] = step_log
+                if train_to_id_first <= epoch:
+                    # Zero your gradients for every batch!
+                    optimizer.zero_grad()
+                    batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
+                    y = metanet(batch_x)
+                    # loss = loss_fn(y, batch_y.unsqueeze(-1).to(torch.float32))
+                    loss = loss_fn(y, batch_y.to(torch.long)) * batch_train_beta
+                    loss.backward()
 
-                # Zero your gradients for every batch!
-                optimizer.zero_grad()
-                batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
-                y = metanet(batch_x)
-                # loss = loss_fn(y, batch_y.unsqueeze(-1).to(torch.float32))
-                loss = loss_fn(y, batch_y.to(torch.long)) * batch_train_beta
-                loss.backward()
+                    # Adjust learning weights
+                    optimizer.step()
 
-                # Adjust learning weights
-                optimizer.step()
-
-                step_log = dict(Epoch=epoch, Batch=batch,
-                                Metric='Task Loss', Score=loss.item())
-                train_store.loc[train_store.shape[0]] = step_log
-                if is_validation_epoch:
-                    metric(y.cpu(), batch_y.cpu())
+                    step_log = dict(Epoch=epoch, Batch=batch,
+                                    Metric='Task Loss', Score=loss.item())
+                    train_store.loc[train_store.shape[0]] = step_log
+                    if is_validation_epoch:
+                        metric(y.cpu(), batch_y.cpu())
 
                 if batch >= 3 and debug:
                     break
 
             if is_validation_epoch:
                 metanet = metanet.eval()
-                validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
-                                      Metric='Train Accuracy', Score=metric.compute().item())
-                train_store.loc[train_store.shape[0]] = validation_log
+                if train_to_id_first <= epoch:
+                    validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
+                                          Metric='Train Accuracy', Score=metric.compute().item())
+                    train_store.loc[train_store.shape[0]] = validation_log
 
                 accuracy = checkpoint_and_validate(metanet, run_path, epoch)
                 validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                       Metric='Test Accuracy', Score=accuracy.item())
                 train_store.loc[train_store.shape[0]] = validation_log
-                if particle_analysis:
-                    counter_dict = defaultdict(lambda: 0)
-                    # This returns ID-functions
-                    _ = test_for_fixpoints(counter_dict, list(metanet.particles))
-                    for key, value in dict(counter_dict).items():
-                        step_log = dict(Epoch=int(epoch), Batch=BATCHSIZE, Metric=key, Score=value)
-                        train_store.loc[train_store.shape[0]] = step_log
+            if particle_analysis and (init_st or is_validation_epoch):
+                counter_dict = defaultdict(lambda: 0)
+                # This returns ID-functions
+                _ = test_for_fixpoints(counter_dict, list(metanet.particles))
+                for key, value in dict(counter_dict).items():
+                    step_log = dict(Epoch=int(epoch), Batch=BATCHSIZE, Metric=key, Score=value)
+                    train_store.loc[train_store.shape[0]] = step_log
+            if init_st or is_validation_epoch:
                 for particle in metanet.particles:
                     weight_log = (epoch, particle.name, *flat_for_store(particle.parameters()))
                     weight_store.loc[weight_store.shape[0]] = weight_log
@@ -355,7 +362,7 @@ if __name__ == '__main__':
                 fig, ax = plt.subplots(ncols=2)
                 labels = ['Full Network', 'Sparse, No Identity', 'Sparse, No Other']
                 colors = sns.color_palette()[:diff_df.shape[0]] if diff_df.shape[0] >= 2 else sns.color_palette()[0]
-                barplot = sns.barplot(data=diff_df, y='Accuracy', x='Particle Type', color=colors, ax=ax[0])
+                barplot = sns.barplot(data=diff_df, y='Accuracy', x='Particle Type', palette=colors, ax=ax[0])
                 # noinspection PyUnboundLocalVariable
                 for idx, patch in enumerate(barplot.patches):
                     if idx != 0:
@@ -366,7 +373,7 @@ if __name__ == '__main__':
                 ax[0].set_xlabel('Accuracy')
                 # ax[0].legend()
 
-                ax[1].pie(counter_dict.values(), labels=counter_dict.keys(), colors=sns.color_palette()[:3], )
+                ax[1].pie(counter_dict.values(), labels=counter_dict.keys(), colors=colors, )
                 ax[1].set_title('Particle Count for ')
                 # ax[1].set_xlabel('')
 
