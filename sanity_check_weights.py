@@ -56,7 +56,7 @@ if __name__ == '__main__':
     d_test = DataLoader(mnist_test, batch_size=BATCHSIZE, shuffle=False, drop_last=True, num_workers=WORKER)
     loss_fn = nn.CrossEntropyLoss()
     
-    model = torch.load("trained_model_ckpt_e200.tp", map_location=DEVICE).eval()
+    model = torch.load("mn_st_40_6_res_Tsk_0.85", map_location=DEVICE).eval()
     weights = extract_weights_from_model(model)
     test_weights_as_model(weights, d_test)
     

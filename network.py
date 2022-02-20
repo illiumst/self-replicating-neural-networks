@@ -68,7 +68,6 @@ class Net(nn.Module):
                 for weight_id, weight_value in enumerate(self.state_dict()[layer_name][line_id]):
                     self.state_dict()[layer_name][line_id][weight_id] = new_weights[i]
                     i += 1
-
         return self
 
     def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
@@ -100,7 +99,6 @@ class Net(nn.Module):
 
         self._weight_pos_enc_and_mask = None
 
-
     @property
     def _weight_pos_enc(self):
         if self._weight_pos_enc_and_mask is None:
@@ -127,8 +125,8 @@ class Net(nn.Module):
 
             # Normalize 1,2,3 column of dim 1
             last_pos_idx = self.input_size - 4
-            norm2 = weight_matrix[:, 1:-last_pos_idx].pow(2).sum(keepdim=True, dim=0).sqrt()
-            weight_matrix[:, 1:-last_pos_idx] = (weight_matrix[:, 1:-last_pos_idx] / norm2) + 1e-8
+            max_per_col, _ = weight_matrix[:, 1:-last_pos_idx].max(keepdim=True, dim=0)
+            weight_matrix[:, 1:-last_pos_idx] = (weight_matrix[:, 1:-last_pos_idx] / max_per_col) + 1e-8
 
             # computations
             # create a mask where pos is 0 if it is to be replaced
@@ -389,6 +387,7 @@ class MetaNet(nn.Module):
     def __init__(self, interface=4, depth=3, width=4, out=1, activation=None, residual_skip=True, dropout=0,
                  weight_interface=5, weight_hidden_size=2, weight_output_size=1,):
         super().__init__()
+        self.residual_skip = residual_skip
         self.dropout = dropout
         self.activation = activation
         self.out = out
@@ -398,7 +397,6 @@ class MetaNet(nn.Module):
         self.weight_interface = weight_interface
         self.weight_hidden_size = weight_hidden_size
         self.weight_output_size = weight_output_size
-
         self._meta_layer_first = MetaLayer(name=f'L{0}',
                                            interface=self.interface,
                                            width=self.width,
@@ -411,6 +409,7 @@ class MetaNet(nn.Module):
                                                          weight_interface=weight_interface,
                                                          weight_hidden_size=weight_hidden_size,
                                                          weight_output_size=weight_output_size,
+
                                                          ) for layer_idx in range(self.depth - 2)]
                                               )
         self._meta_layer_last = MetaLayer(name=f'L{len(self._meta_layer_list)}',
@@ -441,10 +440,10 @@ class MetaNet(nn.Module):
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
             if self.dropout != 0:
                 tensor = self.dropout_layer(tensor)
-            if idx % 2 == 1:
+            if idx % 2 == 1 and self.residual_skip:
                 x = tensor.clone()
             tensor = meta_layer(tensor)
-            if idx % 2 == 0:
+            if idx % 2 == 0 and self.residual_skip:
                 tensor = tensor + x
         if self.dropout != 0:
             x = self.dropout_layer(x)
