@@ -1,9 +1,9 @@
 # from __future__ import annotations
 import copy
 import random
-from math import sqrt
 from typing import Union
 
+import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -61,13 +61,14 @@ class Net(nn.Module):
 
     def apply_weights(self, new_weights: Tensor):
         """ Changing the weights of a network to new given values. """
-        # TODO: Change this to 'parameters' version
-        i = 0
-        for layer_id, layer_name in enumerate(self.state_dict()):
-            for line_id, line_values in enumerate(self.state_dict()[layer_name]):
-                for weight_id, weight_value in enumerate(self.state_dict()[layer_name][line_id]):
-                    self.state_dict()[layer_name][line_id][weight_id] = new_weights[i]
-                    i += 1
+        keys = self.state_dict().keys()
+        shapes = [x.shape for x in self.state_dict().values()]
+        numels = np.cumsum([0, *[x.numel() for x in self.state_dict().values()]])
+        new_state_dict = {key: new_weights[start: end].view(
+            shape) for key, shape, start, end in zip(keys, shapes, numels, numels[1:])
+        }
+        # noinspection PyTypeChecker
+        self.load_state_dict(new_state_dict)
         return self
 
     def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
@@ -158,6 +159,11 @@ class Net(nn.Module):
         pos_enc, mask = self._weight_pos_enc
         weight_matrix = pos_enc * mask + weight_matrix.expand(-1, pos_enc.shape[-1]) * (1 - mask)
         return weight_matrix
+
+    def target_weight_matrix(self) -> Tensor:
+        weight_matrix = torch.cat([x.view(-1, 1) for x in self.parameters()])
+        return weight_matrix
+
 
     def self_train(self,
                    training_steps: int,
@@ -305,11 +311,10 @@ class MetaCell(nn.Module):
         super().__init__()
         self.name = name
         self.interface = interface
-        self.weight_interface = 5
-        self.net_hidden_size = 2
-        self.net_ouput_size = 1
-        self.meta_weight_list = nn.ModuleList()
-        self.meta_weight_list.extend(
+        self.weight_interface = weight_interface
+        self.net_hidden_size = weight_hidden_size
+        self.net_ouput_size = weight_output_size
+        self.meta_weight_list = nn.ModuleList(
             [Net(self.weight_interface, self.net_hidden_size,
                  self.net_ouput_size, name=f'{self.name}_W{weight_idx}'
                  ) for weight_idx in range(self.interface)]
@@ -360,13 +365,13 @@ class MetaLayer(nn.Module):
         self.interface = interface
         self.width = width
 
-        self.meta_cell_list = nn.ModuleList()
-        self.meta_cell_list.extend([MetaCell(name=f'{self.name}_C{cell_idx}',
-                                             interface=interface,
-                                             weight_interface=weight_interface, weight_hidden_size=weight_hidden_size,
-                                             weight_output_size=weight_output_size,
-                                             ) for cell_idx in range(self.width)]
-                                   )
+        self.meta_cell_list = nn.ModuleList([
+            MetaCell(name=f'{self.name}_C{cell_idx}',
+                     interface=interface,
+                     weight_interface=weight_interface, weight_hidden_size=weight_hidden_size,
+                     weight_output_size=weight_output_size,
+                     ) for cell_idx in range(self.width)]
+        )
 
     def forward(self, x):
         cell_results = []
@@ -467,6 +472,14 @@ class MetaNet(nn.Module):
     @property
     def hyperparams(self):
         return {key: val for key, val in self.__dict__.items() if not key.startswith('_')}
+
+    def replace_particles(self, particle_weights_list):
+        for layer in self._all_layers_with_particles:
+            for cell in layer.meta_cell_list:
+                # Individual replacement on cell lvl
+                for weight in cell.meta_weight_list:
+                    weight.apply_weights(next(particle_weights_list))
+        return self
 
 
 class MetaNetCompareBaseline(nn.Module):

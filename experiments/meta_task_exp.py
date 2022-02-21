@@ -277,7 +277,6 @@ def flat_for_store(parameters):
 
 if __name__ == '__main__':
 
-    use_sparse_implementation = True
     self_train = True
     training = True
     train_to_id_first = False
@@ -303,11 +302,6 @@ if __name__ == '__main__':
     tsk_str = f'{f"_Tsk_{tsk_threshold}" if train_to_task_first else ""}'
     exp_path = Path('output') / f'mn_{st_str}_{EPOCH}_{weight_hidden_size}{a_str}{res_str}{id_str}{tsk_str}'
 
-    if use_sparse_implementation:
-        metanet_class = SparseNetwork
-    else:
-        metanet_class = MetaNet
-
     for seed in range(n_seeds):
         seed_path = exp_path / str(seed)
 
@@ -325,12 +319,15 @@ if __name__ == '__main__':
             d = DataLoader(dataset, batch_size=BATCHSIZE, shuffle=True, drop_last=True, num_workers=WORKER)
 
             interface = np.prod(dataset[0][0].shape)
-            metanet = metanet_class(interface, depth=5, width=6, out=10, residual_skip=residual_skip,
+            sparse_metanet = SparseNetwork(interface, depth=5, width=6, out=10, residual_skip=residual_skip,
                                     weight_hidden_size=weight_hidden_size,).to(DEVICE)
-            meta_weight_count = sum(p.numel() for p in next(metanet.particles).parameters())
+            dense_metanet = MetaNet(interface, depth=5, width=6, out=10, residual_skip=residual_skip,
+                                    weight_hidden_size=weight_hidden_size,).to(DEVICE)
+            meta_weight_count = sum(p.numel() for p in next(dense_metanet.particles).parameters())
 
             loss_fn = nn.CrossEntropyLoss()
-            optimizer = torch.optim.SGD(metanet.parameters(), lr=0.008, momentum=0.9)
+            dense_optimizer = torch.optim.SGD(dense_metanet.parameters(), lr=0.008, momentum=0.9)
+            sparse_optimizer = torch.optim.SGD(sparse_metanet.parameters(), lr=0.008, momentum=0.9)
 
             train_store = new_storage_df('train', None)
             weight_store = new_storage_df('weights', meta_weight_count)
@@ -338,34 +335,40 @@ if __name__ == '__main__':
             for epoch in tqdm(range(EPOCH), desc='MetaNet Train - Epochs'):
                 is_validation_epoch = epoch % VALIDATION_FRQ == 0 if not debug else True
                 is_self_train_epoch = epoch % SELF_TRAIN_FRQ == 0 if not debug else True
-                metanet = metanet.train()
+                sparse_metanet = sparse_metanet.train()
+                dense_metanet = dense_metanet.train()
                 if is_validation_epoch:
                     metric = torchmetrics.Accuracy()
                 else:
                     metric = None
-                init_st = train_to_id_first and not all(x.is_fixpoint == ft.identity_func for x in metanet.particles)
+                init_st = train_to_id_first and not all(x.is_fixpoint == ft.identity_func for x in dense_metanet.particles)
                 for batch, (batch_x, batch_y) in tqdm(enumerate(d), total=len(d), desc='MetaNet Train - Batch'):
+                    # Self Train
                     if self_train and not init_tsk and (is_self_train_epoch or init_st):
+                        # Transfer weights
+                        sparse_metanet = sparse_metanet.replace_weights_by_particles(dense_metanet.particles)
                         # Zero your gradients for every batch!
-                        optimizer.zero_grad()
-                        self_train_loss = metanet.combined_self_train() * self_train_alpha
+                        sparse_optimizer.zero_grad()
+                        self_train_loss = sparse_metanet.combined_self_train() * self_train_alpha
                         self_train_loss.backward()
                         # Adjust learning weights
-                        optimizer.step()
+                        sparse_optimizer.step()
                         step_log = dict(Epoch=epoch, Batch=batch,
                                         Metric='Self Train Loss', Score=self_train_loss.item())
                         train_store.loc[train_store.shape[0]] = step_log
+                        # Transfer weights
+                        dense_metanet = dense_metanet.replace_particles(sparse_metanet.particle_weights)
                     if not init_st:
                         # Zero your gradients for every batch!
-                        optimizer.zero_grad()
+                        dense_optimizer.zero_grad()
                         batch_x, batch_y = batch_x.to(DEVICE), batch_y.to(DEVICE)
-                        y_pred = metanet(batch_x)
+                        y_pred = dense_metanet(batch_x)
                         # loss = loss_fn(y, batch_y.unsqueeze(-1).to(torch.float32))
                         loss = loss_fn(y_pred, batch_y.to(torch.long)) * batch_train_beta
                         loss.backward()
 
                         # Adjust learning weights
-                        optimizer.step()
+                        dense_optimizer.step()
 
                         step_log = dict(Epoch=epoch, Batch=batch,
                                         Metric='Task Loss', Score=loss.item())
@@ -377,13 +380,13 @@ if __name__ == '__main__':
                         break
 
                 if is_validation_epoch:
-                    metanet = metanet.eval()
+                    dense_metanet = dense_metanet.eval()
                     if train_to_id_first <= epoch:
                         validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                               Metric='Train Accuracy', Score=metric.compute().item())
                         train_store.loc[train_store.shape[0]] = validation_log
 
-                    accuracy = checkpoint_and_validate(metanet, seed_path, epoch).item()
+                    accuracy = checkpoint_and_validate(dense_metanet, seed_path, epoch).item()
                     validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                           Metric='Test Accuracy', Score=accuracy)
                     train_store.loc[train_store.shape[0]] = validation_log
@@ -392,12 +395,12 @@ if __name__ == '__main__':
                 if init_st or is_validation_epoch:
                     counter_dict = defaultdict(lambda: 0)
                     # This returns ID-functions
-                    _ = test_for_fixpoints(counter_dict, list(metanet.particles))
+                    _ = test_for_fixpoints(counter_dict, list(dense_metanet.particles))
                     for key, value in dict(counter_dict).items():
                         step_log = dict(Epoch=int(epoch), Batch=BATCHSIZE, Metric=key, Score=value)
                         train_store.loc[train_store.shape[0]] = step_log
                 if init_st or is_validation_epoch:
-                    for particle in metanet.particles:
+                    for particle in dense_metanet.particles:
                         weight_log = (epoch, particle.name, *flat_for_store(particle.parameters()))
                         weight_store.loc[weight_store.shape[0]] = weight_log
                     train_store.to_csv(df_store_path, mode='a', header=not df_store_path.exists(), index=False)
@@ -405,18 +408,18 @@ if __name__ == '__main__':
                     train_store = new_storage_df('train', None)
                     weight_store = new_storage_df('weights', meta_weight_count)
 
-            metanet.eval()
+            dense_metanet.eval()
 
             counter_dict = defaultdict(lambda: 0)
             # This returns ID-functions
-            _ = test_for_fixpoints(counter_dict, list(metanet.particles))
+            _ = test_for_fixpoints(counter_dict, list(dense_metanet.particles))
             for key, value in dict(counter_dict).items():
                 step_log = dict(Epoch=int(EPOCH), Batch=BATCHSIZE, Metric=key, Score=value)
                 train_store.loc[train_store.shape[0]] = step_log
-            accuracy = checkpoint_and_validate(metanet, seed_path, EPOCH, final_model=True)
+            accuracy = checkpoint_and_validate(dense_metanet, seed_path, EPOCH, final_model=True)
             validation_log = dict(Epoch=EPOCH, Batch=BATCHSIZE,
                                   Metric='Test Accuracy', Score=accuracy.item())
-            for particle in metanet.particles:
+            for particle in dense_metanet.particles:
                 weight_log = (EPOCH, particle.name, *(flat_for_store(particle.parameters())))
                 weight_store.loc[weight_store.shape[0]] = weight_log
 
