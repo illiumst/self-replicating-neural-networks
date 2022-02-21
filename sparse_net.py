@@ -22,7 +22,9 @@ class SparseLayer(nn.Module):
         self.depth_dim = depth
         self.hidden_dim = width
         self.out_dim = out
-        self.dummy_net = Net(self.interface_dim, self.hidden_dim, self.out_dim)
+        dummy_net = Net(self.interface_dim, self.hidden_dim, self.out_dim)
+        self.dummy_net_shapes = [list(x.shape) for x in dummy_net.parameters()]
+        self.dummy_net_weight_pos_enc = dummy_net._weight_pos_enc
 
         self.sparse_sub_layer = list()
         self.indices = list()
@@ -37,18 +39,14 @@ class SparseLayer(nn.Module):
             self.weights.append(weights)
 
     def coo_sparse_layer(self, layer_id):
-        layer_shape = list(self.dummy_net.parameters())[layer_id].shape
+        layer_shape = self.dummy_net_shapes[layer_id]
         sparse_diagonal = np.eye(self.nr_nets).repeat(layer_shape[0], axis=-2).repeat(layer_shape[1], axis=-1)
         indices = torch.Tensor(np.argwhere(sparse_diagonal == 1).T)
-        values = torch.nn.Parameter(
-            torch.randn((self.nr_nets * (layer_shape[0]*layer_shape[1]))), requires_grad=True
-        )
+        values = torch.nn.Parameter(torch.randn((np.prod((*layer_shape, self.nr_nets)).item())), requires_grad=True)
 
         return indices, values, sparse_diagonal.shape
 
     def get_self_train_inputs_and_targets(self):
-        encoding_matrix, mask = self.dummy_net._weight_pos_enc
-
         # view weights of each sublayer in equal chunks, each column representing weights of one selfrepNN
         # i.e., first interface*hidden weights of layer1, first hidden*hidden weights of layer2
         #  and first hidden*out weights of layer3 = first net
@@ -57,6 +55,13 @@ class SparseLayer(nn.Module):
         # [nr_net*[nr_weights]]
         weights_per_net = [torch.cat([layer[i] for layer in weights]).view(-1, 1) for i in range(self.nr_nets)]
         # (16, 25)
+
+        encoding_matrix, mask = self.dummy_net_weight_pos_enc
+        weight_device = weights_per_net[0].device
+        if weight_device != encoding_matrix.device or weight_device != mask.device:
+            encoding_matrix, mask = encoding_matrix.to(weight_device), mask.to(weight_device)
+            self.dummy_net_weight_pos_enc = encoding_matrix, mask
+
         inputs = torch.hstack(
             [encoding_matrix * mask + weights_per_net[i].expand(-1, encoding_matrix.shape[-1]) * (1 - mask)
              for i in range(self.nr_nets)]
@@ -79,6 +84,24 @@ class SparseLayer(nn.Module):
         for particles, weights in zip(self._particles, weights_per_net):
             particles.apply_weights(weights)
         return self._particles
+
+    @property
+    def particle_weights(self):
+        all_weights = [layer.view(-1, int(len(layer) / self.nr_nets)) for layer in self.weights]
+        weights_per_net = [torch.cat([layer[i] for layer in all_weights]).view(-1, 1) for i in
+                           range(self.nr_nets)]  # [nr_net*[nr_weights]]
+        return weights_per_net
+
+    def replace_weights_by_particles(self, particles):
+        assert len(particles) == self.nr_nets
+
+        # Particle Weight Update
+        all_weights = [list(particle.parameters()) for particle in particles]
+        all_weights = [torch.cat(x).view(-1) for x in zip(*all_weights)]
+        # [layer.view(-1, int(len(layer) / self.nr_nets)) for layer in self.weights]
+        for widx, (weights, key) in enumerate(zip(all_weights, self.state_dict().keys())):
+            self.state_dict()[key] = weights[:]
+        return self
 
     def __call__(self, x):
         for indices, diag_shapes, weights in zip(self.indices, self.diag_shapes, self.weights):
@@ -119,9 +142,12 @@ def test_sparse_layer():
 
 def embed_batch(x, repeat_dim):
     # x of shape (batchsize, flat_img_dim)
-    x = x.unsqueeze(-1) #(batchsize, flat_img_dim, 1)
-    return torch.cat((torch.zeros(x.shape[0], x.shape[1], 4, device=x.device), x), dim=2).repeat(1, 1, repeat_dim) #(batchsize, flat_img_dim, encoding_dim*repeat_dim)
 
+    # (batchsize, flat_img_dim, 1)
+    x = x.unsqueeze(-1)
+    # (batchsize, flat_img_dim, encoding_dim*repeat_dim)
+    # torch.sparse_coo_tensor(indices, weights, diag_shapes, requires_grad=True, device=x.device)
+    return torch.cat((torch.zeros(x.shape[0], x.shape[1], 4, device=x.device), x), dim=2).repeat(1, 1, repeat_dim)
 
 def embed_vector(x, repeat_dim):
     # x of shape [flat_img_dim]
@@ -154,7 +180,7 @@ class SparseNetwork(nn.Module):
         tensor = self.sparse_layer_forward(x, self.first_layer)
         for nl_idx, network_layer in enumerate(self.hidden_layers):
             if nl_idx % 2 == 0 and self.residual_skip:
-                residual = tensor.clone()
+                residual = tensor
             # Sparse Layer pass
             tensor = self.sparse_layer_forward(tensor, network_layer)
 
@@ -180,12 +206,18 @@ class SparseNetwork(nn.Module):
 
     @property
     def particles(self):
-        particles = []
-        particles.extend(self.first_layer.particles)
-        for layer in self.hidden_layers:
-            particles.extend(layer.particles)
-        particles.extend(self.last_layer.particles)
-        return iter(particles)
+        #particles = []
+        #particles.extend(self.first_layer.particles)
+        #for layer in self.hidden_layers:
+        #    particles.extend(layer.particles)
+        #particles.extend(self.last_layer.particles)
+        return (x for y in (self.first_layer.particles,
+                            *(l.particles for l in self.hidden_layers),
+                            self.last_layer.particles) for x in y)
+
+    @property
+    def particle_weights(self):
+        return (x for y in self.sparselayers for x in y.particle_weights)
 
     def to(self, *args, **kwargs):
         super(SparseNetwork, self).to(*args, **kwargs)
@@ -194,17 +226,25 @@ class SparseNetwork(nn.Module):
         self.hidden_layers = nn.ModuleList([hidden_layer.to(*args, **kwargs) for hidden_layer in self.hidden_layers])
         return self
 
+    @property
+    def sparselayers(self):
+        return (x for x in (self.first_layer, *self.hidden_layers, self.last_layer))
+
     def combined_self_train(self):
-        import time
-        t = time.time()
         losses = []
-        for layer in [self.first_layer, *self.hidden_layers, self.last_layer]:
+        for layer in self.sparselayers:
             x, target_data = layer.get_self_train_inputs_and_targets()
             output = layer(x)
 
             losses.append(F.mse_loss(output, target_data))
-        print('Time Taken:', time.time() - t)
         return torch.hstack(losses).sum(dim=-1, keepdim=True)
+
+    def replace_weights_by_particles(self, particles):
+        particles = list(particles)
+        for layer in self.sparselayers:
+            layer.replace_weights_by_particles(particles[:layer.nr_nets])
+            del particles[:layer.nr_nets]
+        return self
 
 
 def test_sparse_net():
