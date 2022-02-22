@@ -45,7 +45,7 @@ from functionalities_test import test_for_fixpoints
 WORKER = 10 if not debug else 2
 debug = False
 BATCHSIZE = 500 if not debug else 50
-EPOCH = 200
+EPOCH = 100
 VALIDATION_FRQ = 3 if not debug else 1
 SELF_TRAIN_FRQ = 1 if not debug else 1
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -288,7 +288,7 @@ if __name__ == '__main__':
     batch_train_beta = 1
     weight_hidden_size = 3
     residual_skip = True
-    n_seeds = 2
+    n_seeds = 5
 
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)

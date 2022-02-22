@@ -55,8 +55,8 @@ if __name__ == '__main__':
     mnist_test = MNIST(str(data_path), transform=MNIST_TRANSFORM, download=True, train=False)
     d_test = DataLoader(mnist_test, batch_size=BATCHSIZE, shuffle=False, drop_last=True, num_workers=WORKER)
     loss_fn = nn.CrossEntropyLoss()
-    
-    model = torch.load("mn_st_40_6_res_Tsk_0.85", map_location=DEVICE).eval()
+    model_path = (Path() / r'experiments\output\mn_st_40_6_res_Tsk_0.85\trained_model_ckpt_e40.tp')
+    model = torch.load(model_path, map_location=DEVICE).eval()
     weights = extract_weights_from_model(model)
     test_weights_as_model(weights, d_test)
     

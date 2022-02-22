@@ -3,7 +3,6 @@ import copy
 import random
 from typing import Union
 
-import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -14,6 +13,7 @@ from tqdm import tqdm
 
 def prng():
     return random.random()
+
 
 class FixTypes:
 
@@ -61,14 +61,12 @@ class Net(nn.Module):
 
     def apply_weights(self, new_weights: Tensor):
         """ Changing the weights of a network to new given values. """
-        keys = self.state_dict().keys()
-        shapes = [x.shape for x in self.state_dict().values()]
-        numels = np.cumsum([0, *[x.numel() for x in self.state_dict().values()]])
-        new_state_dict = {key: new_weights[start: end].view(
-            shape) for key, shape, start, end in zip(keys, shapes, numels, numels[1:])
-        }
-        # noinspection PyTypeChecker
-        self.load_state_dict(new_state_dict)
+        with torch.no_grad():
+            i = 0
+            for parameters in self.parameters():
+                size = parameters.numel()
+                parameters[:] = new_weights[i:i+size].view(parameters.shape)[:]
+                i += size
         return self
 
     def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
@@ -163,7 +161,6 @@ class Net(nn.Module):
     def target_weight_matrix(self) -> Tensor:
         weight_matrix = torch.cat([x.view(-1, 1) for x in self.parameters()])
         return weight_matrix
-
 
     def self_train(self,
                    training_steps: int,
@@ -478,7 +475,7 @@ class MetaNet(nn.Module):
             for cell in layer.meta_cell_list:
                 # Individual replacement on cell lvl
                 for weight in cell.meta_weight_list:
-                    weight.apply_weights(next(particle_weights_list))
+                    weight.apply_weights(next(particle_weights_list).detach())
         return self
 
 
