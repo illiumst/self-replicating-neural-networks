@@ -120,7 +120,7 @@ class SparseLayer(nn.Module):
 
 def test_sparse_layer():
     net = SparseLayer(500) #50 parallel nets
-    loss_fn = torch.nn.MSELoss(reduction="sum")
+    loss_fn = torch.nn.MSELoss()
     optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
     # optimizer = torch.optim.SGD([layer.coalesce().values() for layer in net.sparse_sub_layer], lr=0.004, momentum=0.9)
 
@@ -138,9 +138,10 @@ def test_sparse_layer():
         loss.backward()
         optimizer.step()
 
-    epsilon = pow(10, -5)
-    # is each of the networks self-replicating?
-    print(f"identity_fn after {train_iteration+1} self-train iterations: {sum([torch.allclose(out[i], Y[i], rtol=0, atol=epsilon) for i in range(net.nr_nets)])}/{net.nr_nets}")
+    counter = defaultdict(lambda: 0)
+    id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
+    counter = dict(counter)
+    print(f"identity_fn after {train_iteration + 1} self-train epochs: {counter}")
 
 
 def embed_batch(x, repeat_dim):
@@ -239,7 +240,7 @@ class SparseNetwork(nn.Module):
             x, target_data = layer.get_self_train_inputs_and_targets()
             output = layer(x)
 
-            losses.append(F.mse_loss(output, target_data))
+            losses.append(F.mse_loss(output, target_data) / layer.nr_nets)
         return torch.hstack(losses).sum(dim=-1, keepdim=True)
 
     def replace_weights_by_particles(self, particles):
@@ -269,21 +270,31 @@ def test_sparse_net():
 
 def test_sparse_net_sef_train():
     net = SparseNetwork(30, 5, 6, 10)
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.008, momentum=0.9)
-    optimizer_dict = {
-        key: torch.optim.SGD(layer.parameters(), lr=0.008, momentum=0.9) for key, layer in enumerate(net.sparselayers)
-                      }
     epochs = 1000
-    loss_fn = torch.nn.MSELoss(reduction="sum")
-
-    for _ in trange(epochs):
-        for layer, optim in zip(net.sparselayers, optimizer_dict.values()):
-            optim.zero_grad()
-            x, target_data = layer.get_self_train_inputs_and_targets()
-            output = layer(x)
-            loss = loss_fn(output, target_data)
+    if True:
+        optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
+        for _ in trange(epochs):
+            optimizer.zero_grad()
+            loss = net.combined_self_train()
+            print(loss)
+            exit()
             loss.backward()
-            optim.step()
+            optimizer.step()
+
+    else:
+        optimizer_dict = {
+            key: torch.optim.SGD(layer.parameters(), lr=0.004, momentum=0.9) for key, layer in enumerate(net.sparselayers)
+                          }
+        loss_fn = torch.nn.MSELoss(reduction="mean")
+
+        for layer, optim in zip(net.sparselayers, optimizer_dict.values()):
+            for _ in trange(epochs):
+                optim.zero_grad()
+                x, target_data = layer.get_self_train_inputs_and_targets()
+                output = layer(x)
+                loss = loss_fn(output, target_data)
+                loss.backward()
+                optim.step()
 
     # is each of the networks self-replicating?
     counter = defaultdict(lambda: 0)
@@ -313,7 +324,7 @@ def test_manual_for_loop():
 
 
 if __name__ == '__main__':
-    test_sparse_layer()
+    # test_sparse_layer()
     test_sparse_net_sef_train()
     # test_sparse_net()
     # for comparison

@@ -11,6 +11,11 @@ from torch import optim, Tensor
 from tqdm import tqdm
 
 
+def xavier_init(m):
+    if isinstance(m, nn.Linear):
+        nn.init.xavier_uniform_(m.weight.data)
+
+
 def prng():
     return random.random()
 
@@ -97,6 +102,7 @@ class Net(nn.Module):
         )
 
         self._weight_pos_enc_and_mask = None
+        self.apply(xavier_init)
 
     @property
     def _weight_pos_enc(self):
@@ -503,7 +509,7 @@ class MetaNetCompareBaseline(nn.Module):
 
 
 if __name__ == '__main__':
-    metanet = MetaNet(interface=3, depth=5, width=3, out=1, dropout=0.0, residual_skip=True)
+    metanet = MetaNet(interface=3, depth=5, width=3, out=1, residual_skip=True)
     next(metanet.particles).input_weight_matrix()
     metanet(torch.hstack([torch.full((2, 1), 1.0) for _ in range(metanet.interface)]))
     a = metanet.particles

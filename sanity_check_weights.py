@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
@@ -15,18 +17,20 @@ def extract_weights_from_model(model:MetaNet)->dict:
     inpt[-1] = 1
     inpt.long()
 
-    weights = {i:[] for i in range(model.depth)}
+    weights = defaultdict(list)
     layers = [layer.particles for layer in [model._meta_layer_first, *model._meta_layer_list, model._meta_layer_last]]
-    for i,layer in enumerate(layers):
+    for i, layer in enumerate(layers):
         for net in layer:
             weights[i].append(net(inpt).detach())
-    return weights
+    return dict(weights)
 
-def test_weights_as_model(model, weights:dict, data):
+
+def test_weights_as_model(model, new_weights:dict, data):
     TransferNet = MetaNetCompareBaseline(model.interface, depth=model.depth, width=model.width, out=model.out)
+
     with torch.no_grad():
-        for i, weight_set in weights.items():
-            TransferNet._meta_layer_list[i].weight = torch.nn.Parameter(torch.tensor(weight_set).view(list(TransferNet.parameters())[i].shape))
+        for weights, parameters in zip(new_weights.values(), TransferNet.parameters()):
+            parameters[:] = torch.Tensor(weights).view(parameters.shape)[:]
 
     TransferNet.eval()
     metric = torchmetrics.Accuracy()
@@ -56,7 +60,7 @@ if __name__ == '__main__':
     d_test = DataLoader(mnist_test, batch_size=BATCHSIZE, shuffle=False, drop_last=True, num_workers=WORKER)
     loss_fn = nn.CrossEntropyLoss()
     
-    model = torch.load("0039_model_ckpt.tp", map_location=DEVICE).eval()
+    model = torch.load(Path('experiments/output/trained_model_ckpt_e50.tp'), map_location=DEVICE).eval()
     weights = extract_weights_from_model(model)
     test_weights_as_model(model, weights, d_test)
     
