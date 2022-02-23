@@ -48,7 +48,7 @@ if __name__ == '__main__':
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     WORKER = 0
     BATCHSIZE = 500
-    MNIST_TRANSFORM = Compose([ Resize((15, 15)), ToTensor(), Normalize((0.1307,), (0.3081,)), Flatten(start_dim=0)])
+    MNIST_TRANSFORM = Compose([Resize((15, 15)), ToTensor(), Normalize((0.1307,), (0.3081,)), Flatten(start_dim=0)])
     torch.manual_seed(42)
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)

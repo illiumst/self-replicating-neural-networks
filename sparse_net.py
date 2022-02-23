@@ -1,5 +1,8 @@
+from collections import defaultdict
+
 from torch import nn
 
+import functionalities_test
 from network import Net
 from functionalities_test import is_identity_function
 from tqdm import tqdm,trange
@@ -118,12 +121,12 @@ class SparseLayer(nn.Module):
 def test_sparse_layer():
     net = SparseLayer(500) #50 parallel nets
     loss_fn = torch.nn.MSELoss(reduction="sum")
-    optimizer = torch.optim.SGD(net.weights, lr=0.004, momentum=0.9)
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
     # optimizer = torch.optim.SGD([layer.coalesce().values() for layer in net.sparse_sub_layer], lr=0.004, momentum=0.9)
 
     for train_iteration in trange(1000):
         optimizer.zero_grad()
-        X,Y = net.get_self_train_inputs_and_targets()
+        X, Y = net.get_self_train_inputs_and_targets()
         out = net(X)
 
         loss = loss_fn(out, Y)
@@ -132,10 +135,10 @@ def test_sparse_layer():
         # print("OUT", out.shape)
         # print("LOSS", loss.item())
 
-        loss.backward(retain_graph=True)
+        loss.backward()
         optimizer.step()
 
-    epsilon=pow(10, -5)
+    epsilon = pow(10, -5)
     # is each of the networks self-replicating?
     print(f"identity_fn after {train_iteration+1} self-train iterations: {sum([torch.allclose(out[i], Y[i], rtol=0, atol=epsilon) for i in range(net.nr_nets)])}/{net.nr_nets}")
 
@@ -261,6 +264,26 @@ def test_sparse_net():
     metanet = SparseNetwork(data_dim, depth=3, width=5, out=10)
     batchx, batchy = next(iter(d))
     metanet(batchx)
+    print(f"identity_fn after {train_iteration+1} self-train iterations: {sum([torch.allclose(out[i], Y[i], rtol=0, atol=epsilon) for i in range(net.nr_nets)])}/{net.nr_nets}")
+
+
+def test_sparse_net_sef_train():
+    net = SparseNetwork(30, 5, 6, 10)
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.008, momentum=0.9)
+    epochs = 120
+
+    for _ in trange(epochs):
+        optimizer.zero_grad()
+        loss = net.combined_self_train()
+
+        loss.backward(retain_graph=True)
+        optimizer.step()
+
+    # is each of the networks self-replicating?
+    counter = defaultdict(lambda: 0)
+    id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
+    counter = dict(counter)
+    print(f"identity_fn after {epochs+1} self-train epochs: {counter}")
 
 
 def test_manual_for_loop():
@@ -284,7 +307,8 @@ def test_manual_for_loop():
 
 
 if __name__ == '__main__':
-    test_sparse_layer()
+    # test_sparse_layer()
+    test_sparse_net_sef_train()
     # test_sparse_net()
     # for comparison
-    test_manual_for_loop()
+    # test_manual_for_loop()
