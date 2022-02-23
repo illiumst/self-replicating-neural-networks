@@ -487,25 +487,33 @@ class MetaNet(nn.Module):
 
 class MetaNetCompareBaseline(nn.Module):
 
-    def __init__(self, interface=4, depth=3, width=4, out=1, activation=None):
+    def __init__(self, interface=4, depth=3, width=4, out=1, activation=None, residual_skip=True):
         super().__init__()
+        self.residual_skip = residual_skip
         self.activation = activation
         self.out = out
         self.interface = interface
         self.width = width
         self.depth = depth
-
-        self._meta_layer_list = nn.ModuleList()
-
-        self._meta_layer_list.append(nn.Linear(self.interface, self.width, bias=False))
-        self._meta_layer_list.extend([nn.Linear(self.width, self.width, bias=False) for _ in range(self.depth - 2)])
-        self._meta_layer_list.append(nn.Linear(self.width, self.out, bias=False))
+        
+        self._first_layer = nn.Linear(self.interface, self.width, bias=False)
+        self._meta_layer_list = nn.ModuleList([nn.Linear(self.width, self.width, bias=False) for _ in range(self.depth - 2)])
+        self._last_layer = nn.Linear(self.width, self.out, bias=False)
 
     def forward(self, x):
-        tensor = x
-        for meta_layer in self._meta_layer_list:
+        tensor = self._first_layer(x)
+        for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
+            if idx % 2 == 1 and self.residual_skip:
+                x = tensor.clone()
             tensor = meta_layer(tensor)
+            if idx % 2 == 0 and self.residual_skip:
+                tensor = tensor + x
+        tensor = self._last_layer(tensor)
         return tensor
+    
+    @property
+    def all_layers(self):
+        return (x for x in (self._first_layer, *self._meta_layer_list, self._last_layer))
 
 
 if __name__ == '__main__':

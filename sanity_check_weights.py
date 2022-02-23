@@ -26,7 +26,8 @@ def extract_weights_from_model(model:MetaNet)->dict:
 
 
 def test_weights_as_model(model, new_weights:dict, data):
-    TransferNet = MetaNetCompareBaseline(model.interface, depth=model.depth, width=model.width, out=model.out)
+    TransferNet = MetaNetCompareBaseline(model.interface, depth=model.depth, width=model.width, out=model.out,
+                                         residual_skip=True)
 
     with torch.no_grad():
         for weights, parameters in zip(new_weights.values(), TransferNet.parameters()):
@@ -37,7 +38,6 @@ def test_weights_as_model(model, new_weights:dict, data):
     with tqdm(desc='Test Batch: ') as pbar:
         for batch, (batch_x, batch_y) in tqdm(enumerate(data), total=len(data), desc='MetaNet Sanity Check'):
             y = TransferNet(batch_x)
-            loss = loss_fn(y, batch_y)
             acc = metric(y.cpu(), batch_y.cpu())
             pbar.set_postfix_str(f'Acc: {acc}')
             pbar.update()
@@ -52,13 +52,12 @@ if __name__ == '__main__':
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     WORKER = 0
     BATCHSIZE = 500
-    MNIST_TRANSFORM = Compose([Resize((15, 15)), ToTensor(), Normalize((0.1307,), (0.3081,)), Flatten(start_dim=0)])
+    MNIST_TRANSFORM = Compose([Resize((15, 15)), ToTensor(), Flatten(start_dim=0)])
     torch.manual_seed(42)
     data_path = Path('data')
     data_path.mkdir(exist_ok=True, parents=True)
     mnist_test = MNIST(str(data_path), transform=MNIST_TRANSFORM, download=True, train=False)
     d_test = DataLoader(mnist_test, batch_size=BATCHSIZE, shuffle=False, drop_last=True, num_workers=WORKER)
-    loss_fn = nn.CrossEntropyLoss()
     
     model = torch.load(Path('experiments/output/trained_model_ckpt_e50.tp'), map_location=DEVICE).eval()
     weights = extract_weights_from_model(model)
