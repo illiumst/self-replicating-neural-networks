@@ -6,11 +6,14 @@ from tqdm import tqdm
 from network import FixTypes, Net
 
 
+epsilon_error_margin = pow(10, -5)
+
+
 def is_divergent(network: Net) -> bool:
     return network.input_weight_matrix().isinf().any().item() or network.input_weight_matrix().isnan().any().item()
 
 
-def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
+def is_identity_function(network: Net, epsilon=epsilon_error_margin) -> bool:
 
     input_data = network.input_weight_matrix()
     target_data = network.create_target_weights(input_data)
@@ -20,14 +23,14 @@ def is_identity_function(network: Net, epsilon=pow(10, -5)) -> bool:
                           rtol=0, atol=epsilon)
 
 
-def is_zero_fixpoint(network: Net, epsilon=pow(10, -5)) -> bool:
+def is_zero_fixpoint(network: Net, epsilon=epsilon_error_margin) -> bool:
     target_data = network.create_target_weights(network.input_weight_matrix().detach())
     result = torch.allclose(target_data, torch.zeros_like(target_data), rtol=0, atol=epsilon)
     # result = bool(len(np.nonzero(network.create_target_weights(network.input_weight_matrix()))))
     return result
 
 
-def is_secondary_fixpoint(network: Net, epsilon: float = pow(10, -5)) -> bool:
+def is_secondary_fixpoint(network: Net, epsilon: float = epsilon_error_margin) -> bool:
     """ Secondary fixpoint check is done like this: compare first INPUT with second OUTPUT.
     If they are within the boundaries, then is secondary fixpoint. """
 

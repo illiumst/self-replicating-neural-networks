@@ -420,15 +420,13 @@ class MetaNet(nn.Module):
 
                                                          ) for layer_idx in range(self.depth - 2)]
                                               )
-        self._meta_layer_last = MetaLayer(name=f'L{len(self._meta_layer_list)}',
+        self._meta_layer_last = MetaLayer(name=f'L{len(self._meta_layer_list) + 1}',
                                           interface=self.width, width=self.out,
                                           weight_interface=weight_interface,
                                           weight_hidden_size=weight_hidden_size,
                                           weight_output_size=weight_output_size,
                                           )
         self.dropout_layer = nn.Dropout(p=self.dropout)
-
-        self._all_layers_with_particles = [self._meta_layer_first, *self._meta_layer_list, self._meta_layer_last]
 
     def replace_with_zero(self, ident_key):
         replaced_particles = 0
@@ -442,47 +440,50 @@ class MetaNet(nn.Module):
         return self
 
     def forward(self, x):
-        if self.dropout != 0:
-            x = self.dropout_layer(x)
         tensor = self._meta_layer_first(x)
+        residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            if self.dropout != 0:
-                tensor = self.dropout_layer(tensor)
             if idx % 2 == 1 and self.residual_skip:
-                x = tensor.clone()
+                residual = tensor.clone()
             tensor = meta_layer(tensor)
             if idx % 2 == 0 and self.residual_skip:
-                tensor = tensor + x
-        if self.dropout != 0:
-            x = self.dropout_layer(x)
-        tensor = self._meta_layer_last(x)
+                tensor = tensor + residual
+        tensor = self._meta_layer_last(tensor)
         return tensor
 
     @property
     def particles(self):
-        return (cell for metalayer in self._all_layers_with_particles for cell in metalayer.particles)
+        return (cell for metalayer in self.all_layers for cell in metalayer.particles)
 
-    def combined_self_train(self):
+    def combined_self_train(self, optimizer, reduction='mean'):
+        optimizer.zero_grad()
         losses = []
         for particle in self.particles:
             # Intergrate optimizer and backward function
             input_data = particle.input_weight_matrix()
             target_data = particle.create_target_weights(input_data)
             output = particle(input_data)
-            losses.append(F.mse_loss(output, target_data))
-        return torch.hstack(losses).sum(dim=-1, keepdim=True)
+            losses.append(F.mse_loss(output, target_data, reduction=reduction))
+        losses = torch.hstack(losses).sum(dim=-1, keepdim=True)
+        losses.backward()
+        optimizer.step()
+        return losses.detach()
 
     @property
     def hyperparams(self):
         return {key: val for key, val in self.__dict__.items() if not key.startswith('_')}
 
     def replace_particles(self, particle_weights_list):
-        for layer in self._all_layers_with_particles:
+        for layer in self.all_layers:
             for cell in layer.meta_cell_list:
                 # Individual replacement on cell lvl
                 for weight in cell.meta_weight_list:
                     weight.apply_weights(next(particle_weights_list).detach())
         return self
+
+    @property
+    def all_layers(self):
+        return (x for x in (self._meta_layer_first, *self._meta_layer_list, self._meta_layer_last))
 
 
 class MetaNetCompareBaseline(nn.Module):
@@ -495,19 +496,24 @@ class MetaNetCompareBaseline(nn.Module):
         self.interface = interface
         self.width = width
         self.depth = depth
-        
         self._first_layer = nn.Linear(self.interface, self.width, bias=False)
-        self._meta_layer_list = nn.ModuleList([nn.Linear(self.width, self.width, bias=False) for _ in range(self.depth - 2)])
+        self._meta_layer_list = nn.ModuleList([nn.Linear(self.width, self.width, bias=False
+                                                         ) for _ in range(self.depth - 2)])
         self._last_layer = nn.Linear(self.width, self.out, bias=False)
 
     def forward(self, x):
         tensor = self._first_layer(x)
+        if self.activation:
+            tensor = self.activation(tensor)
+        residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            if idx % 2 == 1 and self.residual_skip:
-                x = tensor.clone()
             tensor = meta_layer(tensor)
+            if idx % 2 == 1 and self.residual_skip:
+                residual = tensor.clone()
             if idx % 2 == 0 and self.residual_skip:
-                tensor = tensor + x
+                tensor = tensor + residual
+            if self.activation:
+                tensor = self.activation(tensor)
         tensor = self._last_layer(tensor)
         return tensor
     
