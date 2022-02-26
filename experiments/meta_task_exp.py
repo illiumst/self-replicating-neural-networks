@@ -393,6 +393,8 @@ if __name__ == '__main__':
                             if use_sparse_network:
                                 dense_metanet = dense_metanet.replace_particles(sparse_metanet.particle_weights)
 
+                        dense_metanet.reset_diverged_particles()
+
                         # Task Train
                         if not init_st:
                             # Zero your gradients for every batch!

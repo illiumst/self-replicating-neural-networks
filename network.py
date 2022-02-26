@@ -487,6 +487,11 @@ class MetaNet(nn.Module):
     def all_layers(self):
         return (x for x in (self._meta_layer_first, *self._meta_layer_list, self._meta_layer_last))
 
+    def reset_diverged_particles(self):
+        for particle in self.particles:
+            if particle.is_fixpoint == FixTypes.divergent:
+                particle.apply(xavier_init)
+
 
 class MetaNetCompareBaseline(nn.Module):
 
