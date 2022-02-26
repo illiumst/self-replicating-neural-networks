@@ -109,37 +109,38 @@ class Net(nn.Module):
         if self._weight_pos_enc_and_mask is None:
             d = next(self.parameters()).device
             weight_matrix = []
-            for layer_id, layer in enumerate(self.layers):
-                x = next(layer.parameters())
-                weight_matrix.append(
-                    torch.cat(
-                        (
-                            # Those are the weights
-                            torch.full((x.numel(), 1), 0, device=d),
-                            # Layer enumeration
-                            torch.full((x.numel(), 1), layer_id, device=d),
-                            # Cell Enumeration
-                            torch.arange(layer.out_features, device=d).repeat_interleave(layer.in_features).view(-1, 1),
-                            # Weight Enumeration within the Cells
-                            torch.arange(layer.in_features, device=d).view(-1, 1).repeat(layer.out_features, 1),
-                            *(torch.full((x.numel(), 1), 0, device=d) for _ in range(self.input_size-4))
-                        ), dim=1)
-                )
-            # Finalize
-            weight_matrix = torch.cat(weight_matrix).float()
+            with torch.no_grad():
+                for layer_id, layer in enumerate(self.layers):
+                    x = next(layer.parameters())
+                    weight_matrix.append(
+                        torch.cat(
+                            (
+                                # Those are the weights
+                                torch.full((x.numel(), 1), 0, device=d),
+                                # Layer enumeration
+                                torch.full((x.numel(), 1), layer_id, device=d),
+                                # Cell Enumeration
+                                torch.arange(layer.out_features, device=d).repeat_interleave(layer.in_features).view(-1, 1),
+                                # Weight Enumeration within the Cells
+                                torch.arange(layer.in_features, device=d).view(-1, 1).repeat(layer.out_features, 1),
+                                *(torch.full((x.numel(), 1), 0, device=d) for _ in range(self.input_size-4))
+                            ), dim=1)
+                    )
+                # Finalize
+                weight_matrix = torch.cat(weight_matrix).float()
 
-            # Normalize 1,2,3 column of dim 1
-            last_pos_idx = self.input_size - 4
-            max_per_col, _ = weight_matrix[:, 1:-last_pos_idx].max(keepdim=True, dim=0)
-            weight_matrix[:, 1:-last_pos_idx] = (weight_matrix[:, 1:-last_pos_idx] / max_per_col) + 1e-8
+                # Normalize 1,2,3 column of dim 1
+                last_pos_idx = self.input_size - 4
+                max_per_col, _ = weight_matrix[:, 1:-last_pos_idx].max(keepdim=True, dim=0)
+                weight_matrix[:, 1:-last_pos_idx] = (weight_matrix[:, 1:-last_pos_idx] / max_per_col) + 1e-8
 
-            # computations
-            # create a mask where pos is 0 if it is to be replaced
-            mask = torch.ones_like(weight_matrix)
-            mask[:, 0] = 0
+                # computations
+                # create a mask where pos is 0 if it is to be replaced
+                mask = torch.ones_like(weight_matrix)
+                mask[:, 0] = 0
 
-            self._weight_pos_enc_and_mask = weight_matrix, mask
-        return tuple(x.clone() for x in self._weight_pos_enc_and_mask)
+                self._weight_pos_enc_and_mask = weight_matrix, mask
+        return self._weight_pos_enc_and_mask
 
     def forward(self, x):
         for layer in self.layers:
@@ -328,20 +329,21 @@ class MetaCell(nn.Module):
     def _bed_mask(self):
         if self.__bed_mask is None:
             d = next(self.parameters()).device
-            embedding = torch.zeros(1, self.weight_interface, device=d)
+            embedding = torch.zeros(1, self.weight_interface, device=d, requires_grad=False)
 
             # computations
             # create a mask where pos is 0 if it is to be replaced
-            mask = torch.ones_like(embedding)
+            mask = torch.ones_like(embedding, requires_grad=False, device=d)
             mask[:, -1] = 0
 
             self.__bed_mask = embedding, mask
-        return tuple(x.clone() for x in self.__bed_mask)
+        return self.__bed_mask
 
     def forward(self, x):
         embedding, mask = self._bed_mask
         expanded_mask = mask.expand(*x.shape, embedding.shape[-1])
-        embedding = embedding.repeat(*x.shape, 1)
+        embedding = embedding.expand(*x.shape, embedding.shape[-1])
+        # embedding = embedding.repeat(*x.shape, 1)
 
         # Row-wise
         # xs = x.unsqueeze(-1).expand(-1, -1, embedding.shape[-1]).swapdims(0, 1)
@@ -444,7 +446,7 @@ class MetaNet(nn.Module):
         residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
             if idx % 2 == 1 and self.residual_skip:
-                residual = tensor.clone()
+                residual = tensor
             tensor = meta_layer(tensor)
             if idx % 2 == 0 and self.residual_skip:
                 tensor = tensor + residual
@@ -509,7 +511,7 @@ class MetaNetCompareBaseline(nn.Module):
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
             tensor = meta_layer(tensor)
             if idx % 2 == 1 and self.residual_skip:
-                residual = tensor.clone()
+                residual = tensor
             if idx % 2 == 0 and self.residual_skip:
                 tensor = tensor + residual
             if self.activation:

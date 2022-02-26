@@ -1,5 +1,6 @@
 from collections import defaultdict
 
+import pandas as pd
 from torch import nn
 
 import functionalities_test
@@ -42,9 +43,10 @@ class SparseLayer(nn.Module):
             self.weights.append(weights)
 
     def coo_sparse_layer(self, layer_id):
-        layer_shape = self.dummy_net_shapes[layer_id]
-        sparse_diagonal = np.eye(self.nr_nets).repeat(layer_shape[0], axis=-2).repeat(layer_shape[1], axis=-1)
-        indices = torch.Tensor(np.argwhere(sparse_diagonal == 1).T)
+        with torch.no_grad():
+            layer_shape = self.dummy_net_shapes[layer_id]
+            sparse_diagonal = np.eye(self.nr_nets).repeat(layer_shape[0], axis=-2).repeat(layer_shape[1], axis=-1)
+            indices = torch.Tensor(np.argwhere(sparse_diagonal == 1).T, )
         values = torch.nn.Parameter(torch.randn((np.prod((*layer_shape, self.nr_nets)).item())), requires_grad=True)
 
         return indices, values, sparse_diagonal.shape
@@ -54,23 +56,24 @@ class SparseLayer(nn.Module):
         # i.e., first interface*hidden weights of layer1, first hidden*hidden weights of layer2
         #  and first hidden*out weights of layer3 = first net
         # [nr_layers*[nr_net*nr_weights_layer_i]]
-        weights = [layer.view(-1, int(len(layer)/self.nr_nets)) for layer in self.weights]
-        # [nr_net*[nr_weights]]
-        weights_per_net = [torch.cat([layer[i] for layer in weights]).view(-1, 1) for i in range(self.nr_nets)]
-        # (16, 25)
+        with torch.no_grad():
+            weights = [layer.view(-1, int(len(layer)/self.nr_nets)).detach() for layer in self.weights]
+            # [nr_net*[nr_weights]]
+            weights_per_net = [torch.cat([layer[i] for layer in weights]).view(-1, 1) for i in range(self.nr_nets)]
+            # (16, 25)
 
-        encoding_matrix, mask = self.dummy_net_weight_pos_enc
-        weight_device = weights_per_net[0].device
-        if weight_device != encoding_matrix.device or weight_device != mask.device:
-            encoding_matrix, mask = encoding_matrix.to(weight_device), mask.to(weight_device)
-            self.dummy_net_weight_pos_enc = encoding_matrix, mask
+            encoding_matrix, mask = self.dummy_net_weight_pos_enc
+            weight_device = weights_per_net[0].device
+            if weight_device != encoding_matrix.device or weight_device != mask.device:
+                encoding_matrix, mask = encoding_matrix.to(weight_device), mask.to(weight_device)
+                self.dummy_net_weight_pos_enc = encoding_matrix, mask
 
-        inputs = torch.hstack(
-            [encoding_matrix * mask + weights_per_net[i].expand(-1, encoding_matrix.shape[-1]) * (1 - mask)
-             for i in range(self.nr_nets)]
-        )
-        targets = torch.hstack(weights_per_net)
-        return inputs.T.detach(), targets.T.detach()
+            inputs = torch.hstack(
+                [encoding_matrix * mask + weights_per_net[i].expand(-1, encoding_matrix.shape[-1]) * (1 - mask)
+                 for i in range(self.nr_nets)]
+            )
+            targets = torch.hstack(weights_per_net)
+            return inputs.T, targets.T
 
     @property
     def particles(self):
@@ -119,29 +122,44 @@ class SparseLayer(nn.Module):
 
 
 def test_sparse_layer():
-    net = SparseLayer(500) #50 parallel nets
-    loss_fn = torch.nn.MSELoss()
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
+    net = SparseLayer(1000)
+    loss_fn = torch.nn.MSELoss(reduction='mean')
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.008, momentum=0.9)
     # optimizer = torch.optim.SGD([layer.coalesce().values() for layer in net.sparse_sub_layer], lr=0.004, momentum=0.9)
+    df = pd.DataFrame(columns=['Epoch', 'Func Type', 'Count'])
 
-    for train_iteration in trange(1000):
+    for train_iteration in trange(20000):
         optimizer.zero_grad()
         X, Y = net.get_self_train_inputs_and_targets()
-        out = net(X)
+        output = net(X)
 
-        loss = loss_fn(out, Y)
+        loss = loss_fn(output, Y) * 100
 
-        # print("X:", X.shape, "Y:", Y.shape)
-        # print("OUT", out.shape)
-        # print("LOSS", loss.item())
+        # loss = sum([loss_fn(out, target) for out, target in zip(output, Y)]) / len(output) * 10
 
         loss.backward()
         optimizer.step()
 
+        if train_iteration % 500 == 0:
+            counter = defaultdict(lambda: 0)
+            id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
+            counter = dict(counter)
+            tqdm.write(f"identity_fn after {train_iteration + 1} self-train epochs: {counter}")
+            for key, value in counter.items():
+                df.loc[df.shape[0]] = (train_iteration, key, value)
+
     counter = defaultdict(lambda: 0)
     id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
     counter = dict(counter)
-    print(f"identity_fn after {train_iteration + 1} self-train epochs: {counter}")
+    tqdm.write(f"identity_fn after {train_iteration + 1} self-train epochs: {counter}")
+    for key, value in counter.items():
+        df.loc[df.shape[0]] = (train_iteration, key, value)
+    df.to_csv('counter.csv', mode='w')
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    c = pd.read_csv('counter.csv', index_col=0)
+    sns.lineplot(data=c, x='Epoch', y='Count', hue='Func Type')
+    plt.savefig('counter.png', dpi=300)
 
 
 def embed_batch(x, repeat_dim):
@@ -241,12 +259,15 @@ class SparseNetwork(nn.Module):
 
     def combined_self_train(self, optimizer, reduction='mean'):
         losses = []
+        loss_fn = nn.MSELoss(reduction=reduction)
         for layer in self.sparselayers:
             optimizer.zero_grad()
             x, target_data = layer.get_self_train_inputs_and_targets()
             output = layer(x)
+            # loss = sum([loss_fn(out, target) for out, target in zip(output, target_data)]) / len(output)
 
-            loss = F.mse_loss(output, target_data, reduction=reduction)
+            loss = loss_fn(output, target_data) * 100
+
             losses.append(loss.detach())
             loss.backward()
             optimizer.step()
@@ -279,33 +300,33 @@ def test_sparse_net():
 
 
 def test_sparse_net_sef_train():
-    net = SparseNetwork(30, 5, 6, 10)
-    epochs = 1000
-    if True:
-        optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
-        for _ in trange(epochs):
-            _ = net.combined_self_train(optimizer)
+    net = SparseNetwork(5, 5, 6, 10)
+    epochs = 10000
+    df = pd.DataFrame(columns=['Epoch', 'Func Type', 'Count'])
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
+    for epoch in trange(epochs):
+        _ = net.combined_self_train(optimizer)
 
-    else:
-        optimizer_dict = {
-            key: torch.optim.SGD(layer.parameters(), lr=0.004, momentum=0.9) for key, layer in enumerate(net.sparselayers)
-                          }
-        loss_fn = torch.nn.MSELoss(reduction="mean")
+        if epoch % 500 == 0:
+            counter = defaultdict(lambda: 0)
+            id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
+            counter = dict(counter)
+            tqdm.write(f"identity_fn after {epoch + 1} self-train epochs: {counter}")
+            for key, value in counter.items():
+                df.loc[df.shape[0]] = (epoch, key, value)
 
-        for layer, optim in zip(net.sparselayers, optimizer_dict.values()):
-            for _ in trange(epochs):
-                optim.zero_grad()
-                x, target_data = layer.get_self_train_inputs_and_targets()
-                output = layer(x)
-                loss = loss_fn(output, target_data)
-                loss.backward()
-                optim.step()
-
-    # is each of the networks self-replicating?
     counter = defaultdict(lambda: 0)
     id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
     counter = dict(counter)
-    print(f"identity_fn after {epochs} self-train epochs: {counter}")
+    tqdm.write(f"identity_fn after {epochs} self-train epochs: {counter}")
+    for key, value in counter.items():
+        df.loc[df.shape[0]] = (epoch, key, value)
+    df.to_csv('counter.csv', mode='w')
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    c = pd.read_csv('counter.csv', index_col=0)
+    sns.lineplot(data=c, x='Epoch', y='Count', hue='Func Type')
+    plt.savefig('counter.png', dpi=300)
 
 
 def test_manual_for_loop():
