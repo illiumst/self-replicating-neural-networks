@@ -1,25 +1,29 @@
 from collections import defaultdict
 
 import pandas as pd
+from matplotlib import pyplot as plt
+import seaborn as sns
 from torch import nn
 
 import functionalities_test
 from network import Net
-from functionalities_test import is_identity_function
-from tqdm import tqdm,trange
+from functionalities_test import is_identity_function, test_for_fixpoints, epsilon_error_margin
+from tqdm import tqdm, trange
 import numpy as np
 from pathlib import Path
 import torch
 from torch.nn import Flatten
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
+
 from torchvision.datasets import MNIST
 from torchvision.transforms import ToTensor, Compose, Resize
 
 
 def xavier_init(m):
     if isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight.data)
+        return nn.init.xavier_uniform_(m.weight.data)
+    if isinstance(m, torch.Tensor):
+        return nn.init.xavier_uniform_(m)
 
 
 class SparseLayer(nn.Module):
@@ -101,7 +105,9 @@ class SparseLayer(nn.Module):
         for weights in self.weights:
             if torch.isinf(weights).any() or torch.isnan(weights).any():
                 with torch.no_grad():
-                    xavier_init(weights)
+                    where_nan = torch.nan_to_num(weights, -99, -99, -99)
+                    mask = torch.where(where_nan == -99, 0, 1)
+                    weights[:] = (where_nan * mask + torch.randn_like(weights) * (1 - mask))[:]
 
     @property
     def particle_weights(self):
@@ -139,8 +145,9 @@ def test_sparse_layer():
     optimizer = torch.optim.SGD(net.parameters(), lr=0.008, momentum=0.9)
     # optimizer = torch.optim.SGD([layer.coalesce().values() for layer in net.sparse_sub_layer], lr=0.004, momentum=0.9)
     df = pd.DataFrame(columns=['Epoch', 'Func Type', 'Count'])
+    train_iterations = 20000
 
-    for train_iteration in trange(20000):
+    for train_iteration in trange(train_iterations):
         optimizer.zero_grad()
         X, Y = net.get_self_train_inputs_and_targets()
         output = net(X)
@@ -163,12 +170,11 @@ def test_sparse_layer():
     counter = defaultdict(lambda: 0)
     id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
     counter = dict(counter)
-    tqdm.write(f"identity_fn after {train_iteration + 1} self-train epochs: {counter}")
+    tqdm.write(f"identity_fn after {train_iterations} self-train epochs: {counter}")
     for key, value in counter.items():
-        df.loc[df.shape[0]] = (train_iteration, key, value)
+        df.loc[df.shape[0]] = (train_iterations, key, value)
     df.to_csv('counter.csv', mode='w')
-    import seaborn as sns
-    import matplotlib.pyplot as plt
+
     c = pd.read_csv('counter.csv', index_col=0)
     sns.lineplot(data=c, x='Epoch', y='Count', hue='Func Type')
     plt.savefig('counter.png', dpi=300)
@@ -191,6 +197,11 @@ def embed_vector(x, repeat_dim):
 
 
 class SparseNetwork(nn.Module):
+
+    @property
+    def nr_nets(self):
+        return sum(x.nr_nets for x in self.sparselayers)
+
     def __init__(self, input_dim, depth, width, out, residual_skip=True, activation=None,
                  weight_interface=5, weight_hidden_size=2, weight_output_size=1
                  ):
@@ -216,16 +227,13 @@ class SparseNetwork(nn.Module):
         if self.activation:
             tensor = self.activation(tensor)
         for nl_idx, network_layer in enumerate(self.hidden_layers):
-            # Sparse Layer pass
+            # if idx % 2 == 1 and self.residual_skip:
+            if self.residual_skip:
+                residual = tensor
             tensor = self.sparse_layer_forward(tensor, network_layer)
-
-            if self.activation:
-                tensor = self.activation(tensor)
-            if nl_idx % 2 == 0 and self.residual_skip:
-                residual = tensor.clone()
-            if nl_idx % 2 == 1 and self.residual_skip:
-                # noinspection PyUnboundLocalVariable
-                tensor += residual
+            # if idx % 2 == 0 and self.residual_skip:
+            if self.residual_skip:
+                tensor = tensor + residual
         tensor = self.sparse_layer_forward(tensor, self.last_layer, view_dim=self.out_dim)
         return tensor
 
@@ -282,7 +290,7 @@ class SparseNetwork(nn.Module):
             output = layer(x)
             # loss = sum([loss_fn(out, target) for out, target in zip(output, target_data)]) / len(output)
 
-            loss = loss_fn(output, target_data) * 85
+            loss = loss_fn(output, target_data) * layer.nr_nets
 
             losses.append(loss.detach())
             loss.backward()
@@ -311,39 +319,42 @@ def test_sparse_net():
     data_dim = np.prod(dataset[0][0].shape)
     metanet = SparseNetwork(data_dim, depth=3, width=5, out=10)
     batchx, batchy = next(iter(d))
-    metanet(batchx)
-    print(f"identity_fn after {train_iteration+1} self-train iterations: {sum([torch.allclose(out[i], Y[i], rtol=0, atol=epsilon) for i in range(net.nr_nets)])}/{net.nr_nets}")
+    out = metanet(batchx)
+
+    result = sum([torch.allclose(out[i], batchy[i], rtol=0, atol=epsilon_error_margin) for i in range(metanet.nr_nets)])
+    # print(f"identity_fn after {train_iteration+1} self-train iterations: {result} /{net.nr_nets}")
 
 
 def test_sparse_net_sef_train():
-    net = SparseNetwork(5, 5, 6, 10)
-    epochs = 10000
-    df = pd.DataFrame(columns=['Epoch', 'Func Type', 'Count'])
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
-    for epoch in trange(epochs):
-        _ = net.combined_self_train(optimizer)
+    sparse_metanet = SparseNetwork(15*15, 5, 6, 10).to('cuda')
+    init_st_store_path = Path('counter.csv')
+    optimizer = torch.optim.SGD(sparse_metanet.parameters(), lr=0.004, momentum=0.9)
+    init_st_epochs = 10000
+    init_st_df = pd.DataFrame(columns=['Epoch', 'Func Type', 'Count'])
 
-        if epoch % 500 == 0:
+    for st_epoch in trange(init_st_epochs):
+        _ = sparse_metanet.combined_self_train(optimizer)
+
+        if st_epoch % 500 == 0:
             counter = defaultdict(lambda: 0)
-            id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
+            id_functions = test_for_fixpoints(counter, list(sparse_metanet.particles))
             counter = dict(counter)
-            tqdm.write(f"identity_fn after {epoch + 1} self-train epochs: {counter}")
+            tqdm.write(f"identity_fn after {st_epoch} self-train epochs: {counter}")
             for key, value in counter.items():
-                df.loc[df.shape[0]] = (epoch, key, value)
-        net.reset_diverged_particles()
+                init_st_df.loc[init_st_df.shape[0]] = (st_epoch, key, value)
+        sparse_metanet.reset_diverged_particles()
 
     counter = defaultdict(lambda: 0)
-    id_functions = functionalities_test.test_for_fixpoints(counter, list(net.particles))
+    id_functions = test_for_fixpoints(counter, list(sparse_metanet.particles))
     counter = dict(counter)
-    tqdm.write(f"identity_fn after {epochs} self-train epochs: {counter}")
+    tqdm.write(f"identity_fn after {init_st_epochs} self-train epochs: {counter}")
     for key, value in counter.items():
-        df.loc[df.shape[0]] = (epoch, key, value)
-    df.to_csv('counter.csv', mode='w')
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-    c = pd.read_csv('counter.csv', index_col=0)
+        init_st_df.loc[init_st_df.shape[0]] = (init_st_epochs, key, value)
+    init_st_df.to_csv(init_st_store_path, mode='w', index=False)
+
+    c = pd.read_csv(init_st_store_path)
     sns.lineplot(data=c, x='Epoch', y='Count', hue='Func Type')
-    plt.savefig('counter.png', dpi=300)
+    plt.savefig(init_st_store_path, dpi=300)
 
 
 def test_manual_for_loop():
@@ -353,7 +364,7 @@ def test_manual_for_loop():
     rounds = 1000
 
     for net in tqdm(nets):
-        optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
+        optimizer = torch.optim.SGD(net.parameters(), lr=0.0001, momentum=0.9)
         for i in range(rounds):
             optimizer.zero_grad()
             input_data = net.input_weight_matrix()

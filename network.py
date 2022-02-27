@@ -445,10 +445,12 @@ class MetaNet(nn.Module):
         tensor = self._meta_layer_first(x)
         residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            if idx % 2 == 1 and self.residual_skip:
+            # if idx % 2 == 1 and self.residual_skip:
+            if self.residual_skip:
                 residual = tensor
             tensor = meta_layer(tensor)
-            if idx % 2 == 0 and self.residual_skip:
+            # if idx % 2 == 0 and self.residual_skip:
+            if self.residual_skip:
                 tensor = tensor + residual
         tensor = self._meta_layer_last(tensor)
         return tensor
