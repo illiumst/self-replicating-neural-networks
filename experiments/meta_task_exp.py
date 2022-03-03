@@ -295,8 +295,7 @@ def flat_for_store(parameters):
 
 
 def train_self_replication(model, optimizer, st_stps) -> dict:
-    for _ in range(st_stps):
-        self_train_loss = model.combined_self_train(optimizer)
+    self_train_loss = model.combined_self_train(optimizer, st_stps)
     # noinspection PyUnboundLocalVariable
     stp_log = dict(Metric='Self Train Loss', Score=self_train_loss.item())
     return stp_log

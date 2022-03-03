@@ -463,19 +463,20 @@ class MetaNet(nn.Module):
     def particles(self):
         return (cell for metalayer in self.all_layers for cell in metalayer.particles)
 
-    def combined_self_train(self, optimizer, reduction='mean'):
-        optimizer.zero_grad()
+    def combined_self_train(self, optimizer, n_st_steps, reduction='mean'):
+
         losses = []
-        n = 10
         for particle in self.particles:
-            # Intergrate optimizer and backward function
-            input_data = particle.input_weight_matrix()
-            target_data = particle.create_target_weights(input_data)
-            output = particle(input_data)
-            losses.append(F.mse_loss(output, target_data, reduction=reduction))
+            for _ in range(n_st_steps):
+                optimizer.zero_grad()
+                # Intergrate optimizer and backward function
+                input_data = particle.input_weight_matrix()
+                target_data = particle.create_target_weights(input_data)
+                output = particle(input_data)
+                losses.append(F.mse_loss(output, target_data, reduction=reduction))
+                losses.backward()
+                optimizer.step()
         losses = torch.hstack(losses).sum(dim=-1, keepdim=True)
-        losses.backward()
-        optimizer.step()
         return losses.detach()
 
     @property

@@ -68,7 +68,8 @@ if __name__ == '__main__':
         mean_self_tain_loss = []
 
         for batch, (batch_x, batch_y) in tenumerate(dataloader):
-            # self_train_loss, _ = net.self_train(2, save_history=False, learning_rate=0.004)
+            self_train_loss, _ = net.self_train(2, save_history=False, learning_rate=0.004)
+
             for _ in range(2):
                 optimizer.zero_grad()
                 input_data = net.input_weight_matrix()
