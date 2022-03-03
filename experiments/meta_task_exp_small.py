@@ -1,23 +1,14 @@
-import pickle
-import re
-import shutil
+import platform
+import sys
 from collections import defaultdict
 from pathlib import Path
-import sys
-import platform
 
-import pandas as pd
-import torchmetrics
 import numpy as np
 import torch
-from matplotlib import pyplot as plt
-import seaborn as sns
+import torchmetrics
 from torch import nn
-from torch.nn import Flatten
 from torch.utils.data import Dataset, DataLoader
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor, Compose, Resize
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 # noinspection DuplicatedCode
 if platform.node() == 'CarbonX':
@@ -42,74 +33,37 @@ else:
 from network import MetaNet, FixTypes as ft
 from sparse_net import SparseNetwork
 from functionalities_test import test_for_fixpoints
+from experiments.meta_task_exp import new_storage_df, train_self_replication, train_task, set_checkpoint, \
+    flat_for_store, plot_training_result, plot_training_particle_types, run_particle_dropout_and_plot, \
+    plot_network_connectivity_by_fixtype
 
 WORKER = 10 if not debug else 2
 debug = False
-BATCHSIZE = 500 if not debug else 50
-EPOCH = 50
-VALIDATION_FRQ = 3 if not debug else 1
+BATCHSIZE = 50 if not debug else 50
+EPOCH = 10
+VALIDATION_FRQ = 1 if not debug else 1
 SELF_TRAIN_FRQ = 1 if not debug else 1
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-DATA_PATH = Path('data')
-DATA_PATH.mkdir(exist_ok=True, parents=True)
-
-if debug:
-    torch.autograd.set_detect_anomaly(True)
-
-
-class ToFloat:
-
-    def __init__(self):
-        pass
-
-    def __call__(self, x):
-        return x.to(torch.float32)
-
 
 class AddTaskDataset(Dataset):
-    def __init__(self, length=int(5e5)):
+    def __init__(self, length=int(1e5)):
         super().__init__()
         self.length = length
-        self.prng = np.random.default_rng()
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, _):
-        ab = self.prng.normal(size=(2,)).astype(np.float32)
+        ab = torch.randn(size=(2,)).to(torch.float32)
         return ab, ab.sum(axis=-1, keepdims=True)
 
 
-def set_checkpoint(model, out_path, epoch_n, final_model=False):
-    epoch_n = str(epoch_n)
-    if not final_model:
-        ckpt_path = Path(out_path) / 'ckpt' / f'{epoch_n.zfill(4)}_model_ckpt.tp'
-    else:
-        ckpt_path = Path(out_path) / f'trained_model_ckpt_e{epoch_n}.tp'
-    ckpt_path.parent.mkdir(exist_ok=True, parents=True)
-
-    torch.save(model, ckpt_path, pickle_protocol=pickle.HIGHEST_PROTOCOL)
-    py_store_path = Path(out_path) / 'exp_py.txt'
-    if not py_store_path.exists():
-        shutil.copy(__file__, py_store_path)
-    return ckpt_path
-
-
-def validate(checkpoint_path, ratio=0.1):
+def validate(checkpoint_path, valid_d, ratio=1, validmetric=torchmetrics.MeanAbsoluteError()):
     checkpoint_path = Path(checkpoint_path)
     import torchmetrics
 
     # initialize metric
-    validmetric = torchmetrics.Accuracy()
-    ut = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0)])
-
-    try:
-        datas = MNIST(str(DATA_PATH), transform=ut, train=False)
-    except RuntimeError:
-        datas = MNIST(str(DATA_PATH), transform=ut, train=False, download=True)
-    valid_d = DataLoader(datas, batch_size=BATCHSIZE, shuffle=True, drop_last=True, num_workers=WORKER)
-
     model = torch.load(checkpoint_path, map_location=DEVICE).eval()
     n_samples = int(len(valid_d) * ratio)
 
@@ -127,226 +81,45 @@ def validate(checkpoint_path, ratio=0.1):
 
     # metric on all batches using custom accumulation
     acc = validmetric.compute()
-    tqdm.write(f"Avg. accuracy on all data: {acc}")
+    tqdm.write(f"Avg. Accuracy on all data: {acc}")
     return acc
 
 
-def new_storage_df(identifier, weight_count):
-    if identifier == 'train':
-        return pd.DataFrame(columns=['Epoch', 'Batch', 'Metric', 'Score'])
-    elif identifier == 'weights':
-        return pd.DataFrame(columns=['Epoch', 'Weight', *(f'weight_{x}' for x in range(weight_count))])
-
-
-def checkpoint_and_validate(model, out_path, epoch_n, final_model=False):
+def checkpoint_and_validate(model, out_path, epoch_n, valid_d, final_model=False):
     out_path = Path(out_path)
     ckpt_path = set_checkpoint(model, out_path, epoch_n, final_model=final_model)
-    result = validate(ckpt_path)
+    result = validate(ckpt_path, valid_d)
     return result
-
-
-def plot_training_particle_types(path_to_dataframe):
-    plt.clf()
-    # load from Drive
-    df = pd.read_csv(path_to_dataframe, index_col=False)
-    # Set up figure
-    fig, ax = plt.subplots()  # initializes figure and plots
-    data = df.loc[df['Metric'].isin(ft.all_types())]
-    fix_types = data['Metric'].unique()
-    data = data.pivot(index='Epoch', columns='Metric', values='Score').reset_index().fillna(0)
-    _ = plt.stackplot(data['Epoch'], *[data[fixtype] for fixtype in fix_types], labels=fix_types.tolist())
-
-    ax.set(ylabel='Particle Count', xlabel='Epoch')
-    ax.set_title('Particle Type Count')
-
-    fig.legend(loc="center right", title='Particle Type', bbox_to_anchor=(0.85, 0.5))
-    plt.tight_layout()
-    if debug:
-        plt.show()
-    else:
-        plt.savefig(Path(path_to_dataframe.parent / 'training_particle_type_lp.png'), dpi=300)
-
-
-def plot_training_result(path_to_dataframe):
-    plt.clf()
-    # load from Drive
-    df = pd.read_csv(path_to_dataframe, index_col=False)
-
-    # Set up figure
-    fig, ax1 = plt.subplots()  # initializes figure and plots
-    ax2 = ax1.twinx()  # applies twinx to ax2, which is the second y-axis.
-
-    # plots the first set of data
-    data = df[(df['Metric'] == 'Task Loss') | (df['Metric'] == 'Self Train Loss')].groupby(['Epoch', 'Metric']).mean()
-    palette = sns.color_palette()[1:data.reset_index()['Metric'].unique().shape[0]+1]
-    sns.lineplot(data=data.groupby(['Epoch', 'Metric']).mean(), x='Epoch', y='Score', hue='Metric',
-                 palette=palette, ax=ax1)
-
-    # plots the second set of data
-    data = df[(df['Metric'] == 'Test Accuracy') | (df['Metric'] == 'Train Accuracy')]
-    palette = sns.color_palette()[len(palette)+1:data.reset_index()['Metric'].unique().shape[0] + len(palette)+1]
-    sns.lineplot(data=data, x='Epoch', y='Score', marker='o', hue='Metric', palette=palette)
-
-    ax1.set(yscale='log', ylabel='Losses')
-    ax1.set_title('Training Lineplot')
-    ax2.set(ylabel='Accuracy')
-
-    fig.legend(loc="center right", title='Metric', bbox_to_anchor=(0.85, 0.5))
-    ax1.get_legend().remove()
-    ax2.get_legend().remove()
-    plt.tight_layout()
-    if debug:
-        plt.show()
-    else:
-        plt.savefig(Path(path_to_dataframe.parent / 'training_lineplot.png'), dpi=300)
-
-
-def plot_network_connectivity_by_fixtype(path_to_trained_model):
-    m = torch.load(path_to_trained_model, map_location=torch.device('cpu')).eval()
-    # noinspection PyProtectedMember
-    particles = list(m.particles)
-    df = pd.DataFrame(columns=['type', 'layer', 'neuron', 'name'])
-
-    for prtcl in particles:
-        l, c, w = [float(x) for x in re.sub("[^0-9|_]", "", prtcl.name).split('_')]
-        df.loc[df.shape[0]] = (prtcl.is_fixpoint, l-1, w, prtcl.name)
-        df.loc[df.shape[0]] = (prtcl.is_fixpoint, l, c, prtcl.name)
-    for layer in list(df['layer'].unique()):
-        # Rescale
-        divisor = df.loc[(df['layer'] == layer), 'neuron'].max()
-        df.loc[(df['layer'] == layer), 'neuron'] /= divisor
-
-    tqdm.write(f'Connectivity Data gathered')
-    for n, fixtype in enumerate(ft.all_types()):
-        if df[df['type'] == fixtype].shape[0] > 0:
-            plt.clf()
-            ax = sns.lineplot(y='neuron', x='layer', hue='name', data=df[df['type'] == fixtype],
-                              legend=False, estimator=None, lw=1)
-            _ = sns.lineplot(y=[0, 1], x=[-1, df['layer'].max()], legend=False, estimator=None, lw=0)
-            ax.set_title(fixtype)
-            lines = ax.get_lines()
-            for line in lines:
-                line.set_color(sns.color_palette()[n])
-            if debug:
-                plt.show()
-            else:
-                plt.savefig(Path(path_to_trained_model.parent / f'net_connectivity_{fixtype}.png'), dpi=300)
-            tqdm.write(f'Connectivity plottet: {fixtype} - n = {df[df["type"] == fixtype].shape[0]}')
-        else:
-            tqdm.write(f'No Connectivity {fixtype}')
-
-
-def run_particle_dropout_test(model_path):
-    diff_store_path = model_path.parent / 'diff_store.csv'
-    latest_model = torch.load(model_path, map_location=DEVICE).eval()
-    prtcl_dict = defaultdict(lambda: 0)
-    _ = test_for_fixpoints(prtcl_dict, list(latest_model.particles))
-    tqdm.write(str(dict(prtcl_dict)))
-    diff_df = pd.DataFrame(columns=['Particle Type', 'Accuracy', 'Diff'])
-
-    acc_pre = validate(model_path, ratio=1).item()
-    diff_df.loc[diff_df.shape[0]] = ('All Organism', acc_pre, 0)
-
-    for fixpoint_type in ft.all_types():
-        new_model = torch.load(model_path, map_location=DEVICE).eval().replace_with_zero(fixpoint_type)
-        if [x for x in new_model.particles if x.is_fixpoint == fixpoint_type]:
-            new_ckpt = set_checkpoint(new_model, model_path.parent, fixpoint_type, final_model=True)
-            acc_post = validate(new_ckpt, ratio=1).item()
-            acc_diff = abs(acc_post - acc_pre)
-            tqdm.write(f'Zero_ident diff = {acc_diff}')
-            diff_df.loc[diff_df.shape[0]] = (fixpoint_type, acc_post, acc_diff)
-
-    diff_df.to_csv(diff_store_path, mode='a', header=not diff_store_path.exists(), index=False)
-    return diff_store_path
-
-
-def plot_dropout_stacked_barplot(model_path):
-    diff_store_path = model_path.parent / 'diff_store.csv'
-    diff_df = pd.read_csv(diff_store_path)
-    particle_dict = defaultdict(lambda: 0)
-    latest_model = torch.load(model_path, map_location=DEVICE).eval()
-    _ = test_for_fixpoints(particle_dict, list(latest_model.particles))
-    tqdm.write(str(dict(particle_dict)))
-    plt.clf()
-    fig, ax = plt.subplots(ncols=2)
-    colors = sns.color_palette()[1:diff_df.shape[0]+1]
-    barplot = sns.barplot(data=diff_df, y='Accuracy', x='Particle Type', ax=ax[0], palette=colors)
-    # noinspection PyUnboundLocalVariable
-    #for idx, patch in enumerate(barplot.patches):
-    #    if idx != 0:
-    #        # we recenter the bar
-    #        patch.set_x(patch.get_x() + idx * 0.035)
-
-    ax[0].set_title('Accuracy after particle dropout')
-    ax[0].set_xlabel('Particle Type')
-
-    ax[1].pie(particle_dict.values(), labels=particle_dict.keys(), colors=list(reversed(colors)), )
-    ax[1].set_title('Particle Count')
-
-    plt.tight_layout()
-    if debug:
-        plt.show()
-    else:
-        plt.savefig(Path(diff_store_path.parent / 'dropout_stacked_barplot.png'), dpi=300)
-
-
-def run_particle_dropout_and_plot(model_path):
-    diff_store_path = run_particle_dropout_test(model_path)
-    plot_dropout_stacked_barplot(diff_store_path)
-
-
-def flat_for_store(parameters):
-    return (x.item() for y in parameters for x in y.detach().flatten())
-
-
-def train_self_replication(model, optimizer, st_steps) -> dict:
-    for _ in range(st_steps):
-        self_train_loss = model.combined_self_train(optimizer)
-    # noinspection PyUnboundLocalVariable
-    step_log = dict(Metric='Self Train Loss', Score=self_train_loss.item())
-    return step_log
-
-
-def train_task(model, optimizer, loss_func, btch_x, btch_y) -> (dict, torch.Tensor):
-    # Zero your gradients for every batch!
-    optimizer.zero_grad()
-    btch_x, btch_y = btch_x.to(DEVICE), btch_y.to(DEVICE)
-    y_prd = model(btch_x)
-    # loss = loss_fn(y, batch_y.unsqueeze(-1).to(torch.float32))
-    loss = loss_func(y_prd, btch_y.to(torch.float))
-    loss.backward()
-
-    # Adjust learning weights
-    optimizer.step()
-
-    stp_log = dict(Metric='Task Loss', Score=loss.item())
-
-    return stp_log, y_prd
 
 
 if __name__ == '__main__':
 
     training = True
-    train_to_id_first = True
+    train_to_id_first = False
     train_to_task_first = False
     seq_task_train = True
     force_st_for_epochs_n = 5
-    n_st_per_batch = 2
+    n_st_per_batch = 10
     activation = None  # nn.ReLU()
 
     use_sparse_network = False
 
-    for weight_hidden_size in [4, 5, 6]:
+    for weight_hidden_size in [3, 4]:
 
         tsk_threshold = 0.85
         weight_hidden_size = weight_hidden_size
         residual_skip = False
         n_seeds = 3
         depth = 3
+        width = 3
+        out = 1
 
+        data_path = Path('data')
+        data_path.mkdir(exist_ok=True, parents=True)
         assert not (train_to_task_first and train_to_id_first)
 
         ac_str = f'_{activation.__class__.__name__}' if activation is not None else ''
+        s_str = f'_n_{n_st_per_batch}' if n_st_per_batch > 1 else ""
         res_str = f'{"" if residual_skip else "_no_res"}'
         # dr_str = f'{f"_dr_{dropout}" if dropout != 0 else ""}'
         id_str = f'{f"_StToId" if train_to_id_first else ""}'
@@ -354,8 +127,8 @@ if __name__ == '__main__':
         sprs_str = '_sprs' if use_sparse_network else ''
         f_str = f'_f_{force_st_for_epochs_n}' if \
             force_st_for_epochs_n and seq_task_train and train_to_task_first else ""
-        config_str = f'{res_str}{id_str}{tsk_str}{f_str}{sprs_str}'
-        exp_path = Path('output') / f'mn_st_{EPOCH}_{weight_hidden_size}{config_str}{ac_str}'
+        config_str = f'{s_str}{res_str}{id_str}{tsk_str}{f_str}{sprs_str}'
+        exp_path = Path('output') / f'add_st_{EPOCH}_{weight_hidden_size}{config_str}{ac_str}'
 
         if not training:
             # noinspection PyRedeclaration
@@ -374,23 +147,26 @@ if __name__ == '__main__':
                 for path in [model_path, df_store_path, weight_store_path]:
                     assert not path.exists(), f'Path "{path}" already exists. Check your configuration!'
 
-                utility_transforms = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0)])
-                try:
-                    dataset = MNIST(str(DATA_PATH), transform=utility_transforms)
-                except RuntimeError:
-                    dataset = MNIST(str(DATA_PATH), transform=utility_transforms, download=True)
-                d = DataLoader(dataset, batch_size=BATCHSIZE, shuffle=True, drop_last=True, num_workers=WORKER)
+                train_data = AddTaskDataset()
+                valid_data = AddTaskDataset()
+                train_load = DataLoader(train_data, batch_size=BATCHSIZE, shuffle=True,
+                                        drop_last=True, num_workers=WORKER)
+                vali_load = DataLoader(valid_data, batch_size=BATCHSIZE, shuffle=False,
+                                       drop_last=True, num_workers=WORKER)
 
-                interface = np.prod(dataset[0][0].shape)
-                dense_metanet = MetaNet(interface, depth=depth, width=6, out=10, residual_skip=residual_skip,
-                                        weight_hidden_size=weight_hidden_size, activation=activation).to(DEVICE)
-                sparse_metanet = SparseNetwork(interface, depth=depth, width=6, out=10, residual_skip=residual_skip,
-                                               weight_hidden_size=weight_hidden_size, activation=activation
+                interface = np.prod(train_data[0][0].shape)
+                dense_metanet = MetaNet(interface, depth=depth, width=width, out=out,
+                                        residual_skip=residual_skip, weight_hidden_size=weight_hidden_size,
+                                        activation=activation
+                                        ).to(DEVICE)
+                sparse_metanet = SparseNetwork(interface, depth=depth, width=width, out=out,
+                                               residual_skip=residual_skip, weight_hidden_size=weight_hidden_size,
+                                               activation=activation
                                                ).to(DEVICE) if use_sparse_network else dense_metanet
                 if use_sparse_network:
                     sparse_metanet = sparse_metanet.replace_weights_by_particles(dense_metanet.particles)
 
-                loss_fn = nn.CrossEntropyLoss()
+                loss_fn = nn.MSELoss()
                 dense_optimizer = torch.optim.SGD(dense_metanet.parameters(), lr=0.004, momentum=0.9)
                 sparse_optimizer = torch.optim.SGD(
                     sparse_metanet.parameters(), lr=0.001, momentum=0.9
@@ -410,7 +186,7 @@ if __name__ == '__main__':
                     dense_metanet = dense_metanet.train()
 
                     # Init metrics, even we do not need:
-                    metric = torchmetrics.Accuracy()
+                    metric = torchmetrics.MeanAbsoluteError()
 
                     # Define what to train in this epoch:
                     do_tsk_train = train_to_task_first
@@ -418,7 +194,9 @@ if __name__ == '__main__':
                     init_st     = (train_to_id_first and not dense_metanet.count_fixpoints() > 200)
                     do_st_train = init_st or is_self_train_epoch or force_st
 
-                    for batch, (batch_x, batch_y) in tqdm(enumerate(d), total=len(d), desc='MetaNet Train - Batch'):
+                    for batch, (batch_x, batch_y) in tqdm(enumerate(train_load),
+                                                          total=len(train_load), desc='MetaNet Train - Batch'
+                                                          ):
 
                         # Self Train
                         if do_st_train:
@@ -458,7 +236,7 @@ if __name__ == '__main__':
                                                   Metric='Train Accuracy', Score=metric.compute().item())
                             train_store.loc[train_store.shape[0]] = validation_log
 
-                        accuracy = checkpoint_and_validate(dense_metanet, seed_path, epoch).item()
+                        accuracy = checkpoint_and_validate(dense_metanet, seed_path, epoch, vali_load).item()
                         validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                               Metric='Test Accuracy', Score=accuracy)
                         train_store.loc[train_store.shape[0]] = validation_log
@@ -503,7 +281,7 @@ if __name__ == '__main__':
                 for key, value in dict(counter_dict).items():
                     step_log = dict(Epoch=int(EPOCH), Batch=BATCHSIZE, Metric=key, Score=value)
                     train_store.loc[train_store.shape[0]] = step_log
-                accuracy = checkpoint_and_validate(dense_metanet, seed_path, EPOCH, final_model=True)
+                accuracy = checkpoint_and_validate(dense_metanet, seed_path, EPOCH, vali_load, final_model=True)
                 validation_log = dict(Epoch=EPOCH, Batch=BATCHSIZE,
                                       Metric='Test Accuracy', Score=accuracy.item())
                 for particle in dense_metanet.particles:
@@ -526,7 +304,7 @@ if __name__ == '__main__':
                 exit(1)
 
             try:
-                run_particle_dropout_and_plot(seed_path)
+                run_particle_dropout_and_plot(model_path)
             except ValueError as e:
                 print(e)
             try:

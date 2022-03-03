@@ -489,6 +489,13 @@ class MetaNet(nn.Module):
     def all_layers(self):
         return (x for x in (self._meta_layer_first, *self._meta_layer_list, self._meta_layer_last))
 
+    @property
+    def particle_parameter_count(self):
+        return sum(p.numel() for p in next(self.particles).parameters())
+
+    def count_fixpoints(self, fix_type=FixTypes.identity_func):
+        return sum(x.is_fixpoint == fix_type for x in self.particles)
+
     def reset_diverged_particles(self):
         for particle in self.particles:
             if particle.is_fixpoint == FixTypes.divergent:

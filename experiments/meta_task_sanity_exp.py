@@ -57,7 +57,7 @@ if __name__ == '__main__':
     multiplication_target = 0.03
 
     loss_fn = nn.MSELoss()
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.008, momentum=0.9)
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
 
     train_frame = pd.DataFrame(columns=['Epoch', 'Batch', 'Metric', 'Score'])
 
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         mean_batch_loss = []
         mean_self_tain_loss = []
         for batch, (batch_x, batch_y) in tenumerate(dataloader):
-            self_train_loss, _ = net.self_train(10, save_history=False)
+            self_train_loss, _ = net.self_train(2, save_history=False)
             batch_x_emb = torch.zeros(batch_x.shape[0], 5)
             batch_x_emb[:, -1] = batch_x.squeeze()
             y = net(batch_x_emb)
