@@ -221,7 +221,7 @@ if __name__ == "__main__":
     ST_steps = 1000
     ST_epochs = 5
     ST_log_step_size = 10
-    ST_population_size = 1000
+    ST_population_size = 10
     ST_net_hidden_size = 2
     ST_net_learning_rate = 0.004
     ST_name_hash = random.getrandbits(32)

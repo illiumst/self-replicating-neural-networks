@@ -10,7 +10,7 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import seaborn as sns
-from tqdm import trange
+from tqdm import trange, tqdm
 from tqdm.contrib import tenumerate
 
 
@@ -53,7 +53,7 @@ class MultiplyByXTaskDataset(Dataset):
 
 
 if __name__ == '__main__':
-    net = Net(5, 1, 1)
+    net = Net(5, 4, 1)
     multiplication_target = 0.03
 
     loss_fn = nn.MSELoss()
@@ -68,6 +68,9 @@ if __name__ == '__main__':
         mean_self_tain_loss = []
         for batch, (batch_x, batch_y) in tenumerate(dataloader):
             self_train_loss, _ = net.self_train(2, save_history=False)
+            is_fixpoint = functionalities_test.is_zero_fixpoint(net)
+
+            optimizer.zero_grad()
             batch_x_emb = torch.zeros(batch_x.shape[0], 5)
             batch_x_emb[:, -1] = batch_x.squeeze()
             y = net(batch_x_emb)
@@ -75,6 +78,9 @@ if __name__ == '__main__':
 
             loss.backward()
             optimizer.step()
+            if is_fixpoint:
+                tqdm.write(f'is fixpoint after st : {is_fixpoint}')
+                tqdm.write(f'is fixpoint after tsk: {functionalities_test.is_zero_fixpoint(net)}')
 
             mean_batch_loss.append(loss.detach())
             mean_self_tain_loss.append(self_train_loss.detach())

@@ -99,16 +99,16 @@ if __name__ == '__main__':
     train_to_task_first = False
     seq_task_train = True
     force_st_for_epochs_n = 5
-    n_st_per_batch = 10
+    n_st_per_batch = 2
     activation = None  # nn.ReLU()
 
     use_sparse_network = False
 
-    for weight_hidden_size in [3, 4]:
+    for weight_hidden_size in [3, 4, 5, 6]:
 
         tsk_threshold = 0.85
         weight_hidden_size = weight_hidden_size
-        residual_skip = False
+        residual_skip = True
         n_seeds = 3
         depth = 3
         width = 3
@@ -167,9 +167,9 @@ if __name__ == '__main__':
                     sparse_metanet = sparse_metanet.replace_weights_by_particles(dense_metanet.particles)
 
                 loss_fn = nn.MSELoss()
-                dense_optimizer = torch.optim.SGD(dense_metanet.parameters(), lr=0.004, momentum=0.9)
+                dense_optimizer = torch.optim.SGD(dense_metanet.parameters(), lr=0.00004, momentum=0.9)
                 sparse_optimizer = torch.optim.SGD(
-                    sparse_metanet.parameters(), lr=0.001, momentum=0.9
+                    sparse_metanet.parameters(), lr=0.00001, momentum=0.9
                                                    ) if use_sparse_network else dense_optimizer
 
                 dense_weights_updated = False
@@ -212,6 +212,7 @@ if __name__ == '__main__':
                                 sparse_weights_updated = True
 
                         # Task Train
+                        init_st = True
                         if not init_st:
                             # Transfer weights
                             if sparse_weights_updated:
@@ -231,7 +232,7 @@ if __name__ == '__main__':
                             sparse_weights_updated = False
 
                         dense_metanet = dense_metanet.eval()
-                        if do_tsk_train:
+                        if not init_st:
                             validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                                   Metric='Train Accuracy', Score=metric.compute().item())
                             train_store.loc[train_store.shape[0]] = validation_log

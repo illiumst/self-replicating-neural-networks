@@ -45,7 +45,8 @@ class Net(nn.Module):
         #     target_weight_matrix[i] = input_weight_matrix[i][0]
 
         # Fast and simple
-        return input_weight_matrix[:, 0].unsqueeze(-1)
+        target_weights = input_weight_matrix[:, 0].detach().unsqueeze(-1)
+        return target_weights
 
 
     @staticmethod
@@ -132,6 +133,7 @@ class Net(nn.Module):
                 # Normalize 1,2,3 column of dim 1
                 last_pos_idx = self.input_size - 4
                 max_per_col, _ = weight_matrix[:, 1:-last_pos_idx].max(keepdim=True, dim=0)
+                max_per_col += 1e-8
                 weight_matrix[:, 1:-last_pos_idx] = (weight_matrix[:, 1:-last_pos_idx] / max_per_col) + 1e-8
 
                 # computations
@@ -139,7 +141,7 @@ class Net(nn.Module):
                 mask = torch.ones_like(weight_matrix)
                 mask[:, 0] = 0
 
-                self._weight_pos_enc_and_mask = weight_matrix, mask
+                self._weight_pos_enc_and_mask = weight_matrix.detach(), mask.detach()
         return self._weight_pos_enc_and_mask
 
     def forward(self, x):
@@ -160,10 +162,11 @@ class Net(nn.Module):
 
     def input_weight_matrix(self) -> Tensor:
         """ Calculating the input tensor formed from the weights of the net """
-        weight_matrix = torch.cat([x.view(-1, 1) for x in self.parameters()])
-        pos_enc, mask = self._weight_pos_enc
-        weight_matrix = pos_enc * mask + weight_matrix.expand(-1, pos_enc.shape[-1]) * (1 - mask)
-        return weight_matrix
+        with torch.no_grad():
+            weight_matrix = torch.cat([x.view(-1, 1) for x in self.parameters()])
+            pos_enc, mask = self._weight_pos_enc
+            weight_matrix = pos_enc * mask + weight_matrix.expand(-1, pos_enc.shape[-1]) * (1 - mask)
+        return weight_matrix.detach()
 
     def target_weight_matrix(self) -> Tensor:
         weight_matrix = torch.cat([x.view(-1, 1) for x in self.parameters()])
@@ -204,10 +207,11 @@ class Net(nn.Module):
                                 self.s_train_weights_history.append(weights.T.detach().numpy())
                                 self.loss_history.append(loss.item())
 
-        weights = self.create_target_weights(self.input_weight_matrix())
+
         # Saving weights only at the end of a soup/mixed exp. epoch.
         if save_history:
             if "soup" in self.name or "mixed" in self.name:
+                weights = self.create_target_weights(self.input_weight_matrix())
                 self.s_train_weights_history.append(weights.T.detach().numpy())
                 self.loss_history.append(loss.item())
 
@@ -462,6 +466,7 @@ class MetaNet(nn.Module):
     def combined_self_train(self, optimizer, reduction='mean'):
         optimizer.zero_grad()
         losses = []
+        n = 10
         for particle in self.particles:
             # Intergrate optimizer and backward function
             input_data = particle.input_weight_matrix()
