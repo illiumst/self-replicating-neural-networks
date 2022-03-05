@@ -75,7 +75,7 @@ class Net(nn.Module):
                 i += size
         return self
 
-    def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1) -> None:
+    def __init__(self, i_size: int, h_size: int, o_size: int, name=None, start_time=1, lr=0.004) -> None:
         super().__init__()
         self.start_time = start_time
 
@@ -104,6 +104,7 @@ class Net(nn.Module):
 
         self._weight_pos_enc_and_mask = None
         self.apply(xavier_init)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=lr, momentum=0.9)
 
     @property
     def _weight_pos_enc(self):
@@ -117,14 +118,17 @@ class Net(nn.Module):
                         torch.cat(
                             (
                                 # Those are the weights
-                                torch.full((x.numel(), 1), 0, device=d),
+                                torch.full((x.numel(), 1), 0, device=d, requires_grad=False),
                                 # Layer enumeration
-                                torch.full((x.numel(), 1), layer_id, device=d),
+                                torch.full((x.numel(), 1), layer_id, device=d, requires_grad=False),
                                 # Cell Enumeration
-                                torch.arange(layer.out_features, device=d).repeat_interleave(layer.in_features).view(-1, 1),
+                                torch.arange(layer.out_features, device=d, requires_grad=False
+                                             ).repeat_interleave(layer.in_features).view(-1, 1),
                                 # Weight Enumeration within the Cells
-                                torch.arange(layer.in_features, device=d).view(-1, 1).repeat(layer.out_features, 1),
-                                *(torch.full((x.numel(), 1), 0, device=d) for _ in range(self.input_size-4))
+                                torch.arange(layer.in_features, device=d, requires_grad=False
+                                             ).view(-1, 1).repeat(layer.out_features, 1),
+                                *(torch.full((x.numel(), 1), 0, device=d, requires_grad=False
+                                             ) for _ in range(self.input_size-4))
                             ), dim=1)
                     )
                 # Finalize
@@ -138,7 +142,7 @@ class Net(nn.Module):
 
                 # computations
                 # create a mask where pos is 0 if it is to be replaced
-                mask = torch.ones_like(weight_matrix)
+                mask = torch.ones_like(weight_matrix, requires_grad=False)
                 mask[:, 0] = 0
 
                 self._weight_pos_enc_and_mask = weight_matrix.detach(), mask.detach()
@@ -175,22 +179,20 @@ class Net(nn.Module):
     def self_train(self,
                    training_steps: int,
                    log_step_size: int = 0,
-                   learning_rate: float = 0.0004,
-                   save_history: bool = True
+                   save_history: bool = False,
+                   reduction: str = 'mean'
                    ) -> (Tensor, list):
         """ Training a network to predict its own weights in order to self-replicate. """
 
-        optimizer = optim.SGD(self.parameters(), lr=learning_rate, momentum=0.9)
-
         for training_step in range(training_steps):
             self.number_trained += 1
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             input_data = self.input_weight_matrix()
             target_data = self.create_target_weights(input_data)
             output = self(input_data)
-            loss = F.mse_loss(output, target_data)
+            loss = F.mse_loss(output, target_data, reduction=reduction)
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
             if save_history:
                 # Saving the history of the weights after a certain amount of steps (aka log_step_size) for research.
@@ -207,7 +209,6 @@ class Net(nn.Module):
                                 self.s_train_weights_history.append(weights.T.detach().numpy())
                                 self.loss_history.append(loss.item())
 
-
         # Saving weights only at the end of a soup/mixed exp. epoch.
         if save_history:
             if "soup" in self.name or "mixed" in self.name:
@@ -216,7 +217,7 @@ class Net(nn.Module):
                 self.loss_history.append(loss.item())
 
         self.trained = True
-        return loss, self.loss_history
+        return loss.detach(), self.loss_history
 
     def self_application(self, SA_steps: int, log_step_size: Union[int, None] = None):
         """ Inputting the weights of a network to itself for a number of steps, without backpropagation. """
@@ -463,21 +464,33 @@ class MetaNet(nn.Module):
     def particles(self):
         return (cell for metalayer in self.all_layers for cell in metalayer.particles)
 
-    def combined_self_train(self, optimizer, n_st_steps, reduction='mean'):
+    def combined_self_train(self, n_st_steps, reduction='mean', per_particle=True):
 
         losses = []
-        for particle in self.particles:
+
+        if per_particle:
+            for particle in self.particles:
+                loss, _ = particle.self_train(n_st_steps, reduction=reduction)
+                losses.append(loss.detach())
+        else:
+            optim = torch.optim.SGD(self.parameters(), lr=0.004, momentum=0.9)
             for _ in range(n_st_steps):
-                optimizer.zero_grad()
-                # Intergrate optimizer and backward function
-                input_data = particle.input_weight_matrix()
-                target_data = particle.create_target_weights(input_data)
-                output = particle(input_data)
-                losses.append(F.mse_loss(output, target_data, reduction=reduction))
-                losses.backward()
-                optimizer.step()
+                optim.zero_grad()
+                train_losses = []
+                for particle in self.particles:
+                    # Intergrate optimizer and backward function
+                    input_data = particle.input_weight_matrix()
+                    target_data = particle.create_target_weights(input_data)
+                    output = particle(input_data)
+                    loss = F.mse_loss(output, target_data, reduction=reduction)
+
+                    train_losses.append(loss)
+                train_losses = torch.hstack(train_losses).sum(dim=-1, keepdim=True)
+                train_losses.backward()
+                optim.step()
+                losses.append(train_losses.detach())
         losses = torch.hstack(losses).sum(dim=-1, keepdim=True)
-        return losses.detach()
+        return losses
 
     @property
     def hyperparams(self):

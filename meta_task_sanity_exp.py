@@ -53,8 +53,9 @@ class MultiplyByXTaskDataset(Dataset):
 
 
 if __name__ == '__main__':
-    net = Net(5, 4, 1)
+    net = Net(5, 4, 1, lr=0.004)
     multiplication_target = 0.03
+    st_steps = 0
 
     loss_fn = nn.MSELoss()
     optimizer = torch.optim.SGD(net.parameters(), lr=0.004, momentum=0.9)
@@ -68,31 +69,16 @@ if __name__ == '__main__':
         mean_self_tain_loss = []
 
         for batch, (batch_x, batch_y) in tenumerate(dataloader):
-            self_train_loss, _ = net.self_train(2, save_history=False, learning_rate=0.004)
-
-            for _ in range(2):
-                optimizer.zero_grad()
-                input_data = net.input_weight_matrix()
-                target_data = net.create_target_weights(input_data)
-                output = net(input_data)
-                self_train_loss = loss_fn(output, target_data)
-                self_train_loss.backward()
-                optimizer.step()
+            self_train_loss, _ = net.self_train(1000 // 20, save_history=False)
             is_fixpoint = functionalities_test.is_identity_function(net)
+            if not is_fixpoint:
+                st_steps += 2
 
-            optimizer.zero_grad()
-            batch_x_emb = torch.zeros(batch_x.shape[0], 5)
-            batch_x_emb[:, -1] = batch_x.squeeze()
-            y = net(batch_x_emb)
-            loss = loss_fn(y, batch_y)
-
-            loss.backward()
-            optimizer.step()
             if is_fixpoint:
-                tqdm.write(f'is fixpoint after st : {is_fixpoint}')
+                tqdm.write(f'is fixpoint after st : {is_fixpoint}, first reached after st_steps: {st_steps}')
                 tqdm.write(f'is fixpoint after tsk: {functionalities_test.is_identity_function(net)}')
 
-            mean_batch_loss.append(loss.detach())
+            #mean_batch_loss.append(loss.detach())
             mean_self_tain_loss.append(self_train_loss.detach())
 
         train_frame.loc[train_frame.shape[0]] = dict(Epoch=epoch, Batch=batch,
