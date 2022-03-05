@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from experiments.meta_task_small_utility import AddTaskDataset, train_task
+from experiments.robustness_tester import test_robustness
 from network import MetaNet
 from functionalities_test import test_for_fixpoints, FixTypes as ft
 from experiments.meta_task_utility import new_storage_df, flat_for_store, plot_training_result, \
@@ -29,12 +30,12 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 if __name__ == '__main__':
 
-    training = True
-    plotting = True
+    training = False
+    plotting = False
     n_st = 700
     activation = None  # nn.ReLU()
 
-    for weight_hidden_size in [3, 4, 5, 6]:
+    for weight_hidden_size in [3, 4, 5]:
 
         tsk_threshold = 0.85
         weight_hidden_size = weight_hidden_size
@@ -62,7 +63,6 @@ if __name__ == '__main__':
         for seed in range(n_seeds):
             seed_path = exp_path / str(seed)
 
-            model_path = seed_path / '0000_trained_model.zip'
             df_store_path = seed_path / 'train_store.csv'
             weight_store_path = seed_path / 'weight_store.csv'
             srnn_parameters = dict()
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
             if training:
                 # Check if files do exist on project location, warn and break.
-                for path in [model_path, df_store_path, weight_store_path]:
+                for path in [df_store_path, weight_store_path]:
                     assert not path.exists(), f'Path "{path}" already exists. Check your configuration!'
 
                 train_data = AddTaskDataset()
@@ -189,6 +189,7 @@ if __name__ == '__main__':
                     exit(1)
 
                 try:
+                    # noinspection PyUnboundLocalVariable
                     run_particle_dropout_and_plot(model_path, valid_loader=vali_load, metric_class=VALIDATION_METRIC)
                 except ValueError as e:
                     print('ERROR:', e)
@@ -203,6 +204,12 @@ if __name__ == '__main__':
                     plot_grouped_3d_trajectories_by_layer(model_path, weight_store_path, status_type=ft.other_func)
                 except ValueError as e:
                     print('ERROR:', e)
+            try:
+                model_path = next(seed_path.glob(f'*e{EPOCH}.tp'))
+                model = torch.load(model_path, map_location='cpu')
+                test_robustness(list(model.particles), seed_path)
+            except ValueError as e:
+                print('ERROR:', e)
 
     if n_seeds >= 2:
         combined_df_store_path = exp_path.parent / f'comb_train_{exp_path.stem[:-1]}n.csv'
