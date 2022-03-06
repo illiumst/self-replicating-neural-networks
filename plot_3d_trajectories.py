@@ -24,34 +24,35 @@ def plot_single_3d_trajectories_by_layer(model_path, all_weights_path, status_ty
         
         fixpoint_statuses = [net.is_fixpoint for net in model_layer.particles]
         num_status_of_layer = sum([net.is_fixpoint == status_type for net in model_layer.particles])
-        layer = all_weights[all_weights.Weight.str.startswith(f"L{layer_idx}")]
-        weight_batches = [np.array(layer[layer.Weight == name].values.tolist())[:, 2:]
-                          for name in layer.Weight.unique()]
-        plt.clf()
-        fig = plt.figure()
-        ax = plt.axes(projection='3d')
-        fig.set_figheight(10)
-        fig.set_figwidth(12)
-        plt.tight_layout()
+        if num_status_of_layer != 0:
+            layer = all_weights[all_weights.Weight.str.startswith(f"L{layer_idx}")]
+            weight_batches = [np.array(layer[layer.Weight == name].values.tolist())[:, 2:]
+                              for name in layer.Weight.unique()]
+            plt.clf()
+            fig = plt.figure()
+            ax = plt.axes(projection='3d')
+            fig.set_figheight(10)
+            fig.set_figwidth(12)
+            plt.tight_layout()
 
-        for weights_of_net, status in zip(weight_batches, fixpoint_statuses):
-            if status == status_type:
-                pca.fit(weights_of_net)
-                transformed_trajectory = pca.transform(weights_of_net)
-                xdata = transformed_trajectory[:, 0]
-                ydata = transformed_trajectory[:, 1]
-                zdata = all_epochs
-                ax.plot3D(xdata, ydata, zdata)
-                ax.scatter(xdata, ydata, zdata, s=7)
-        
-        ax.set_title(f"Layer {layer_idx}: {num_status_of_layer}-{status_type}", fontsize=20)
-        ax.set_xlabel('PCA Transformed x-axis', fontsize=20)
-        ax.set_ylabel('PCA Transformed y-axis', fontsize=20)
-        ax.set_zlabel('Epochs', fontsize=30, rotation=0)
-        file_path = save_path / f"layer_{layer_idx}_{num_status_of_layer}_{status_type}.png"
-        plt.savefig(file_path, bbox_inches="tight", dpi=300, format="png")
-        plt.clf()
-        plt.close(fig)
+            for weights_of_net, status in zip(weight_batches, fixpoint_statuses):
+                if status == status_type:
+                    pca.fit(weights_of_net)
+                    transformed_trajectory = pca.transform(weights_of_net)
+                    xdata = transformed_trajectory[:, 0]
+                    ydata = transformed_trajectory[:, 1]
+                    zdata = all_epochs
+                    ax.plot3D(xdata, ydata, zdata)
+                    ax.scatter(xdata, ydata, zdata, s=7)
+
+            ax.set_title(f"Layer {layer_idx}: {num_status_of_layer}-{status_type}", fontsize=20)
+            ax.set_xlabel('PCA Transformed x-axis', fontsize=20)
+            ax.set_ylabel('PCA Transformed y-axis', fontsize=20)
+            ax.set_zlabel('Epochs', fontsize=30, rotation=0)
+            file_path = save_path / f"layer_{layer_idx}_{num_status_of_layer}_{status_type}.png"
+            plt.savefig(file_path, bbox_inches="tight", dpi=300, format="png")
+            plt.clf()
+            plt.close(fig)
 
 
 def plot_grouped_3d_trajectories_by_layer(model_path, all_weights_path, status_type: FixTypes):

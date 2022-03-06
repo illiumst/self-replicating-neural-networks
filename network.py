@@ -443,7 +443,8 @@ class MetaNet(nn.Module):
                     {key: torch.zeros_like(state) for key, state in particle.state_dict().items()}
                 )
                 replaced_particles += 1
-        tqdm.write(f'Particle Parameters replaced: {str(replaced_particles)}')
+        if replaced_particles != 0:
+            tqdm.write(f'Particle Parameters replaced: {str(replaced_particles)}')
         return self
 
     def forward(self, x):
@@ -538,17 +539,15 @@ class MetaNetCompareBaseline(nn.Module):
 
     def forward(self, x):
         tensor = self._first_layer(x)
-        if self.activation:
-            tensor = self.activation(tensor)
         residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            tensor = meta_layer(tensor)
-            if idx % 2 == 1 and self.residual_skip:
+            # if idx % 2 == 1 and self.residual_skip:
+            if self.residual_skip:
                 residual = tensor
-            if idx % 2 == 0 and self.residual_skip:
+            tensor = meta_layer(tensor)
+            # if idx % 2 == 0 and self.residual_skip:
+            if self.residual_skip:
                 tensor = tensor + residual
-            if self.activation:
-                tensor = self.activation(tensor)
         tensor = self._last_layer(tensor)
         return tensor
     

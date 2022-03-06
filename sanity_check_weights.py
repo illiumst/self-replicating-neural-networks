@@ -28,9 +28,10 @@ def extract_weights_from_model(model:MetaNet)->dict:
     return dict(weights)
 
 
-def test_weights_as_model(meta_net, new_weights:dict, data):
-    transfer_net = MetaNetCompareBaseline(meta_net.interface, depth=meta_net.depth, width=meta_net.width, out=meta_net.out,
-                                          residual_skip=True)
+def test_weights_as_model(meta_net, new_weights, data, metric_class=torchmetrics.Accuracy):
+    transfer_net = MetaNetCompareBaseline(meta_net.interface, depth=meta_net.depth,
+                                          width=meta_net.width, out=meta_net.out,
+                                          residual_skip=meta_net.residual_skip)
     with torch.no_grad():
         new_weight_values = list(new_weights.values())
         old_parameters = list(transfer_net.parameters())
@@ -39,40 +40,18 @@ def test_weights_as_model(meta_net, new_weights:dict, data):
             parameters[:] = torch.Tensor(weights).view(parameters.shape)[:]
 
     transfer_net.eval()
-
-    # Test if the margin of error is similar
-
-    im_t = defaultdict(list)
-    rand = torch.randn((1, 15 * 15))
-    for net in [meta_net, transfer_net]:
-        tensor = rand.clone()
-        for layer in net.all_layers:
-            tensor = layer(tensor)
-            im_t[net.__class__.__name__].append(tensor.detach())
-
-    im_t = dict(im_t)
-
-    all_close = {f'layer_{idx}': torch.allclose(y1.detach(), y2.detach(), rtol=0, atol=e
-                                                ) for idx, (y1, y2) in enumerate(zip(*im_t.values()))
-                 }
-    print(f'Cummulative differences per layer is smaller then {e}:\n {all_close}')
-    # all_errors = {f'layer_{idx}': torch.absolute(y1.detach(), y2.detach(), rtol=0, atol=e
-    #                                              ) for idx, (y1, y2) in enumerate(zip(*im_t.values()))
-    #               }
-
+    results = dict()
     for net in [meta_net, transfer_net]:
         net.eval()
-        metric = torchmetrics.Accuracy()
-        with tqdm(desc='Test Batch: ') as pbar:
-            for batch, (batch_x, batch_y) in tqdm(enumerate(data), total=len(data), desc='MetaNet Sanity Check'):
-                y = net(batch_x)
-                acc = metric(y.cpu(), batch_y.cpu())
-                pbar.set_postfix_str(f'Acc: {acc}')
-                pbar.update()
+        metric = metric_class()
+        for batch, (batch_x, batch_y) in tqdm(enumerate(data), total=len(data), desc='Test Batch: '):
+            y = net(batch_x)
+            metric(y.cpu(), batch_y.cpu())
 
-            # metric on all batches using custom accumulation
-            acc = metric.compute()
-            tqdm.write(f"Avg. accuracy on {net.__class__.__name__}: {acc}")
+        # metric on all batches using custom accumulation
+        measure = metric.compute()
+        results[net.__class__.__name__] = measure.item()
+    return results
 
 
 if __name__ == '__main__':

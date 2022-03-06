@@ -1,17 +1,13 @@
-import pickle
-
 import pandas as pd
 import torch
 import random
 import copy
 
-from pathlib import Path
-
 from tqdm import tqdm
-from functionalities_test import is_identity_function, is_zero_fixpoint, test_for_fixpoints, is_divergent
+from functionalities_test import (is_identity_function, is_zero_fixpoint, test_for_fixpoints, is_divergent,
+                                  FixTypes as FT)
 from network import Net
 from torch.nn import functional as F
-from visualization import plot_loss, bar_chart_fixpoints
 import seaborn as sns
 from matplotlib import pyplot as plt
 
@@ -25,7 +21,6 @@ def generate_perfekt_synthetic_fixpoint_weights():
                          [1.0], [0.0], [0.0], [0.0],
                          [1.0], [0.0]
                          ], dtype=torch.float32)
-
 
 PALETTE = 10 * (
     "#377eb8",
@@ -44,14 +39,16 @@ PALETTE = 10 * (
 )
 
 
-def test_robustness(networks: list, exp_path, noise_levels=10, seeds=10, log_step_size=10):
+def test_robustness(model_path, noise_levels=10, seeds=10, log_step_size=10):
+    model = torch.load(model_path, map_location='cpu')
+    networks = [x for x in model.particles if x.is_fixpoint == FT.identity_func]
     time_to_vergence = [[0 for _ in range(noise_levels)] for _ in range(len(networks))]
     time_as_fixpoint = [[0 for _ in range(noise_levels)] for _ in range(len(networks))]
     row_headers = []
 
     df = pd.DataFrame(columns=['setting', 'Noise Level', 'Self Train Steps', 'absolute_loss',
                                'Time to convergence', 'Time as fixpoint'])
-    with tqdm(total=max(len(networks), seeds)) as pbar:
+    with tqdm(total=(seeds * noise_levels * len(networks))) as pbar:
         for setting, fixpoint in enumerate(networks):  # 1 / n
             row_headers.append(fixpoint.name)
             for seed in range(seeds):  # n / 1
@@ -84,7 +81,7 @@ def test_robustness(networks: list, exp_path, noise_levels=10, seeds=10, log_ste
                                                steps, absolute_loss,
                                                time_to_vergence[setting][noise_level],
                                                time_as_fixpoint[setting][noise_level]]
-                pbar.update(1)
+                    pbar.update(1)
 
     # Get the measuremts at the highest time_time_to_vergence
     df_sorted = df.sort_values('Self Train Steps', ascending=False).drop_duplicates(['setting', 'Noise Level'])
@@ -92,6 +89,9 @@ def test_robustness(networks: list, exp_path, noise_levels=10, seeds=10, log_ste
                                              value_vars=['Time to convergence', 'Time as fixpoint'],
                                              var_name="Measurement",
                                              value_name="Steps").sort_values('Noise Level')
+
+    df_melted.to_csv(model_path.parent / 'robustness_boxplot.csv', index=False)
+
     # Plotting
     # plt.rcParams.update({
     #    "text.usetex": True,
@@ -108,8 +108,8 @@ def test_robustness(networks: list, exp_path, noise_levels=10, seeds=10, log_ste
     # bx = sns.catplot(data=df[df['absolute_loss'] < 1], y='absolute_loss', x='application_step', kind='box',
     #                  col='noise_level', col_wrap=3, showfliers=False)
 
-    filename = f"absolute_loss_perapplication_boxplot_grid_wild.png"
-    filepath = exp_path / filename
+    filename = f"robustness_boxplot.png"
+    filepath = model_path.parent / filename
     plt.savefig(str(filepath))
     plt.close('all')
     return time_as_fixpoint, time_to_vergence

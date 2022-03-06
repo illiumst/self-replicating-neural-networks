@@ -61,13 +61,13 @@ def test_for_fixpoints(fixpoint_counter: Dict, nets: List, id_functions=None):
         if is_divergent(net):
             fixpoint_counter[FixTypes.divergent] += 1
             net.is_fixpoint = FixTypes.divergent
+        elif is_zero_fixpoint(net):
+            fixpoint_counter[FixTypes.fix_zero] += 1
+            net.is_fixpoint = FixTypes.fix_zero
         elif is_identity_function(net):  # is default value
             fixpoint_counter[FixTypes.identity_func] += 1
             net.is_fixpoint = FixTypes.identity_func
             id_functions.append(net)
-        elif is_zero_fixpoint(net):
-            fixpoint_counter[FixTypes.fix_zero] += 1
-            net.is_fixpoint = FixTypes.fix_zero
         elif is_secondary_fixpoint(net):
             fixpoint_counter[FixTypes.fix_sec] += 1
             net.is_fixpoint = FixTypes.fix_sec

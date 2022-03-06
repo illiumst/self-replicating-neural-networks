@@ -2,7 +2,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import torch
 import torchmetrics
 from torch import nn
@@ -15,32 +14,35 @@ from network import MetaNet
 from functionalities_test import test_for_fixpoints, FixTypes as ft
 from experiments.meta_task_utility import new_storage_df, flat_for_store, plot_training_result, \
     plot_training_particle_types, run_particle_dropout_and_plot, plot_network_connectivity_by_fixtype, \
-    checkpoint_and_validate
+    checkpoint_and_validate, plot_training_results_over_n_seeds, sanity_weight_swap, FINAL_CHECKPOINT_NAME
 from plot_3d_trajectories import plot_single_3d_trajectories_by_layer, plot_grouped_3d_trajectories_by_layer
 
 WORKER = 0
 BATCHSIZE = 50
 EPOCH = 30
 VALIDATION_FRQ = 3
-VALIDATION_METRIC = torchmetrics.MeanAbsoluteError
+VAL_METRIC_CLASS = torchmetrics.MeanAbsoluteError
 # noinspection PyProtectedMember
-VAL_METRIC_NAME = VALIDATION_METRIC()._get_name()
+VAL_METRIC_NAME = VAL_METRIC_CLASS()._get_name()
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+plot_loader = DataLoader(AddTaskDataset(), batch_size=BATCHSIZE, shuffle=True,
+                         drop_last=True, num_workers=WORKER)
 
 
 if __name__ == '__main__':
 
     training = False
-    plotting = False
-    n_st = 700
+    plotting = True
+    n_st = 100
     activation = None  # nn.ReLU()
 
-    for weight_hidden_size in [3, 4, 5]:
+    for weight_hidden_size in [2]:
 
         tsk_threshold = 0.85
         weight_hidden_size = weight_hidden_size
         residual_skip = True
-        n_seeds = 10
+        n_seeds = 3
         depth = 3
         width = 3
         out = 1
@@ -97,8 +99,8 @@ if __name__ == '__main__':
                     metanet = metanet.train()
 
                     # Init metrics, even we do not need:
-                    metric = VALIDATION_METRIC()
-                    n_st_per_batch = n_st // len(train_load)
+                    metric = VAL_METRIC_CLASS()
+                    n_st_per_batch = max(1, (n_st // len(train_load)))
 
                     for batch, (batch_x, batch_y) in tqdm(enumerate(train_load),
                                                           total=len(train_load), desc='MetaNet Train - Batch'
@@ -125,7 +127,7 @@ if __name__ == '__main__':
                             train_store.loc[train_store.shape[0]] = validation_log
 
                         mae = checkpoint_and_validate(metanet, vali_load, seed_path, epoch,
-                                                      validation_metric=VALIDATION_METRIC).item()
+                                                      validation_metric=VAL_METRIC_CLASS).item()
                         validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                               Metric=f'Test {VAL_METRIC_NAME}', Score=mae)
                         train_store.loc[train_store.shape[0]] = validation_log
@@ -163,7 +165,7 @@ if __name__ == '__main__':
                     step_log = dict(Epoch=int(EPOCH), Batch=BATCHSIZE, Metric=key, Score=value)
                     train_store.loc[train_store.shape[0]] = step_log
                 accuracy = checkpoint_and_validate(metanet, vali_load, seed_path, EPOCH, final_model=True,
-                                                   validation_metric=VALIDATION_METRIC)
+                                                   validation_metric=VAL_METRIC_CLASS)
                 validation_log = dict(Epoch=EPOCH, Batch=BATCHSIZE,
                                       Metric=f'Test {VAL_METRIC_NAME}', Score=accuracy.item())
                 for particle in metanet.particles:
@@ -175,11 +177,11 @@ if __name__ == '__main__':
                 weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists(), index=False)
             if plotting:
 
-                plot_training_result(df_store_path, metric=VAL_METRIC_NAME)
+                plot_training_result(df_store_path, metric_name=VAL_METRIC_NAME)
                 plot_training_particle_types(df_store_path)
 
                 try:
-                    model_path = next(seed_path.glob(f'*e{EPOCH}.tp'))
+                    model_path = next(seed_path.glob(f'*{FINAL_CHECKPOINT_NAME}'))
                 except StopIteration:
                     print('####################################################')
                     print('ERROR: Model pattern did not trigger.')
@@ -190,7 +192,7 @@ if __name__ == '__main__':
 
                 try:
                     # noinspection PyUnboundLocalVariable
-                    run_particle_dropout_and_plot(model_path, valid_loader=vali_load, metric_class=VALIDATION_METRIC)
+                    run_particle_dropout_and_plot(model_path, valid_loader=plot_loader, metric_class=VAL_METRIC_CLASS)
                 except ValueError as e:
                     print('ERROR:', e)
                 try:
@@ -204,24 +206,15 @@ if __name__ == '__main__':
                     plot_grouped_3d_trajectories_by_layer(model_path, weight_store_path, status_type=ft.other_func)
                 except ValueError as e:
                     print('ERROR:', e)
-            try:
-                model_path = next(seed_path.glob(f'*e{EPOCH}.tp'))
-                model = torch.load(model_path, map_location='cpu')
-                test_robustness(list(model.particles), seed_path)
-            except ValueError as e:
-                print('ERROR:', e)
+                try:
+                    test_robustness(model_path, seeds=10)
+                    pass
+                except ValueError as e:
+                    print('ERROR:', e)
 
-    if n_seeds >= 2:
-        combined_df_store_path = exp_path.parent / f'comb_train_{exp_path.stem[:-1]}n.csv'
-        # noinspection PyUnboundLocalVariable
-        found_train_stores = exp_path.rglob(df_store_path.name)
-        train_dfs = []
-        for found_train_store in found_train_stores:
-            train_store_df = pd.read_csv(found_train_store, index_col=False)
-            train_store_df['Seed'] = int(found_train_store.parent.name)
-            train_dfs.append(train_store_df)
-        combined_train_df = pd.concat(train_dfs)
-        combined_train_df.to_csv(combined_df_store_path, index=False)
-        plot_training_result(combined_df_store_path, metric=VAL_METRIC_NAME,
-                             plot_name=f"{combined_df_store_path.stem}.png"
-                             )
+        if 2 <= n_seeds == sum(list(x.is_dir() for x in exp_path.iterdir())):
+            if plotting:
+
+                plot_training_results_over_n_seeds(exp_path, metric_name=VAL_METRIC_NAME)
+
+                sanity_weight_swap(exp_path, plot_loader, VAL_METRIC_CLASS)
