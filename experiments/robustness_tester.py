@@ -77,7 +77,7 @@ def test_robustness(model_path, noise_levels=10, seeds=10, log_step_size=10):
                             # When this raises a Type Error, we found a second order fixpoint!
                         steps += 1
 
-                        df.loc[df.shape[0]] = [setting, f'$\mathregular{{10^{{-{noise_level}}}}}$',
+                        df.loc[df.shape[0]] = [f'{setting}_{seed}', fr'$\mathregular{{10^{{-{noise_level}}}}}$',
                                                steps, absolute_loss,
                                                time_to_vergence[setting][noise_level],
                                                time_as_fixpoint[setting][noise_level]]

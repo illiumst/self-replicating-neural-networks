@@ -15,13 +15,12 @@ from functionalities_test import epsilon_error_margin as e
 from network import MetaNet, MetaNetCompareBaseline
 
 
-def extract_weights_from_model(model:MetaNet)->dict:
-    inpt = torch.zeros(5)
+def extract_weights_from_model(model: MetaNet) -> dict:
+    inpt = torch.zeros(5, device=next(model.parameters()).device, dtype=torch.float)
     inpt[-1] = 1
-    inpt.long()
 
     weights = defaultdict(list)
-    layers = [layer.particles for layer in [model._meta_layer_first, *model._meta_layer_list, model._meta_layer_last]]
+    layers = [layer.particles for layer in model.all_layers]
     for i, layer in enumerate(layers):
         for net in layer:
             weights[i].append(net(inpt).detach())
@@ -29,9 +28,10 @@ def extract_weights_from_model(model:MetaNet)->dict:
 
 
 def test_weights_as_model(meta_net, new_weights, data, metric_class=torchmetrics.Accuracy):
+    meta_net_device = next(meta_net.parameters()).device
     transfer_net = MetaNetCompareBaseline(meta_net.interface, depth=meta_net.depth,
                                           width=meta_net.width, out=meta_net.out,
-                                          residual_skip=meta_net.residual_skip)
+                                          residual_skip=meta_net.residual_skip).to(meta_net_device)
     with torch.no_grad():
         new_weight_values = list(new_weights.values())
         old_parameters = list(transfer_net.parameters())
@@ -45,7 +45,7 @@ def test_weights_as_model(meta_net, new_weights, data, metric_class=torchmetrics
         net.eval()
         metric = metric_class()
         for batch, (batch_x, batch_y) in tqdm(enumerate(data), total=len(data), desc='Test Batch: '):
-            y = net(batch_x)
+            y = net(batch_x.to(meta_net_device))
             metric(y.cpu(), batch_y.cpu())
 
         # metric on all batches using custom accumulation

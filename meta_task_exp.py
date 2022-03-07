@@ -36,7 +36,7 @@ else:
 from network import MetaNet, FixTypes
 from functionalities_test import test_for_fixpoints
 
-utility_transforms = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0), AddGaussianNoise()])
+utility_transforms = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0)])  # , AddGaussianNoise()])
 WORKER = 10 if not debug else 2
 debug = False
 BATCHSIZE = 2000 if not debug else 50
@@ -60,16 +60,16 @@ plot_loader = DataLoader(plot_dataset, batch_size=BATCHSIZE, shuffle=False,
 
 if __name__ == '__main__':
 
-    training = False
-    plotting = False
-    robustnes = True    # EXPENSIV!!!!!!!
-    n_st = 300          # per batch !!
+    training = True
+    plotting = True
+    robustnes = True
+    n_st = 1            # per batch !!
     activation = None   # nn.ReLU()
 
     for weight_hidden_size in [3]:
 
         weight_hidden_size = weight_hidden_size
-        residual_skip = True
+        residual_skip = False
         n_seeds = 3
         depth = 5
         width = 3
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         st_str = f'_nst_{n_st}'
 
         config_str = f'{res_str}{ac_str}{st_str}'
-        exp_path = Path('output') / f'mn_st_{EPOCH}_{weight_hidden_size}{config_str}_gauss'
+        exp_path = Path('output') / f'mn_st_{EPOCH}_{weight_hidden_size}{config_str}'
 
         for seed in range(n_seeds):
             seed_path = exp_path / str(seed)
@@ -161,7 +161,7 @@ if __name__ == '__main__':
                         except RuntimeError:
                             pass
 
-                        accuracy = checkpoint_and_validate(metanet, valid_loader, seed_path, epoch).item()
+                        accuracy = checkpoint_and_validate(metanet, valid_loader, seed_path, epoch, keep_n=5).item()
                         validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
                                               Metric=f'Test {VAL_METRIC_NAME}', Score=accuracy)
                         train_store.loc[train_store.shape[0]] = validation_log
