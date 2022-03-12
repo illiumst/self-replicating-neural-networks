@@ -10,7 +10,6 @@ import torch.nn.functional as F
 from torch import optim, Tensor
 from tqdm import tqdm
 
-
 def xavier_init(m):
     if isinstance(m, nn.Linear):
         nn.init.xavier_uniform_(m.weight.data)
@@ -22,15 +21,22 @@ def prng():
 
 class FixTypes:
 
-    divergent       = 'divergent'
-    fix_zero        = 'fix_zero'
-    identity_func   = 'identity_func'
-    fix_sec         = 'fix_sec'
-    other_func      = 'other_func'
+    divergent       = 'Divergend'
+    fix_zero        = 'All Zero'
+    identity_func   = 'Self-Replicator'
+    fix_sec         = 'Self-Replicator 2nd'
+    other_func      = 'Other'
 
     @classmethod
     def all_types(cls):
         return [val for key, val in cls.__dict__.items() if isinstance(val, str) and not key.startswith('_')]
+
+
+class NetworkLevel:
+
+    all     = 'All'
+    layer   = 'Layer'
+    cell    = 'Cell'
 
 
 class Net(nn.Module):
@@ -365,6 +371,25 @@ class MetaCell(nn.Module):
     def particles(self):
         return (net for net in self.meta_weight_list)
 
+    def make_particles_attack(self, ratio=0.01):
+        random_particle_list = list(self.particles)
+        random.shuffle(random_particle_list)
+        for idx, particle in enumerate(self.particles):
+            if random.random() <= ratio:
+                other = random_particle_list[idx]
+                if other != particle:
+                    particle.attack(other)
+
+    def make_particles_melt(self, ratio=0.01):
+        random_particle_list = list(self.particles)
+        random.shuffle(random_particle_list)
+        for idx, particle in enumerate(self.particles):
+            if random.random() <= ratio:
+                other = random_particle_list[idx]
+                if other != particle:
+                    new_particle = particle.melt(other)
+                    particle.apply_weights(new_particle.target_weight_matrix())
+
 
 class MetaLayer(nn.Module):
     def __init__(self, name, interface=4, width=4,  # residual_skip=False,
@@ -451,12 +476,12 @@ class MetaNet(nn.Module):
         tensor = self._meta_layer_first(x)
         residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            # if idx % 2 == 1 and self.residual_skip:
-            if self.residual_skip:
+            if idx % 2 == 1 and self.residual_skip:
+            # if self.residual_skip:
                 residual = tensor
             tensor = meta_layer(tensor)
-            # if idx % 2 == 0 and self.residual_skip:
-            if self.residual_skip:
+            if idx % 2 == 0 and self.residual_skip:
+            # if self.residual_skip:
                 tensor = tensor + residual
         tensor = self._meta_layer_last(tensor)
         return tensor
@@ -465,7 +490,7 @@ class MetaNet(nn.Module):
     def particles(self):
         return (cell for metalayer in self.all_layers for cell in metalayer.particles)
 
-    def combined_self_train(self, n_st_steps, reduction='mean', per_particle=True):
+    def combined_self_train(self, n_st_steps, reduction='mean', per_particle=True, alpha=1):
 
         losses = []
 
@@ -487,6 +512,8 @@ class MetaNet(nn.Module):
 
                     train_losses.append(loss)
                 train_losses = torch.hstack(train_losses).sum(dim=-1, keepdim=True)
+                if alpha not in [0, 1]:
+                    train_losses *= alpha
                 train_losses.backward()
                 optim.step()
                 losses.append(train_losses.detach())
@@ -504,6 +531,65 @@ class MetaNet(nn.Module):
                 for weight in cell.meta_weight_list:
                     weight.apply_weights(next(particle_weights_list).detach())
         return self
+
+    def make_particles_attack(self, ratio=0.01, level=NetworkLevel.cell, reduction='mean'):
+        if level == NetworkLevel.all:
+            raise NotImplementedError()
+            pass
+        elif level == NetworkLevel.layer:
+            raise NotImplementedError()
+            pass
+        elif level == NetworkLevel.cell:
+            for layer in self.all_layers:
+                for cell in layer.meta_cell_list:
+                    cell.make_particles_attack(ratio)
+            pass
+
+        else:
+            raise ValueError(f'level has to be any of: {[level]}')
+        # Self Train Loss after attack:
+        with torch.no_grad():
+            sa_losses = []
+            for particle in self.particles:
+                # Intergrate optimizer and backward function
+                input_data = particle.input_weight_matrix()
+                target_data = particle.create_target_weights(input_data)
+                output = particle(input_data)
+                loss = F.mse_loss(output, target_data, reduction=reduction)
+
+                sa_losses.append(loss)
+        after_attack_loss = torch.hstack(sa_losses).sum(dim=-1, keepdim=True)
+        return after_attack_loss
+
+    def make_particles_melt(self, ratio=0.01, level=NetworkLevel.cell, reduction='mean'):
+        if level == NetworkLevel.all:
+            raise NotImplementedError()
+            pass
+        elif level == NetworkLevel.layer:
+            raise NotImplementedError()
+            pass
+        elif level == NetworkLevel.cell:
+            for layer in self.all_layers:
+                for cell in layer.meta_cell_list:
+                    cell.make_particles_melt(ratio)
+            pass
+
+        else:
+            raise ValueError(f'level has to be any of: {[level]}')
+        # Self Train Loss after attack:
+        with torch.no_grad():
+            sa_losses = []
+            for particle in self.particles:
+                # Intergrate optimizer and backward function
+                input_data = particle.input_weight_matrix()
+                target_data = particle.create_target_weights(input_data)
+                output = particle(input_data)
+                loss = F.mse_loss(output, target_data, reduction=reduction)
+
+                sa_losses.append(loss)
+        after_melt_loss = torch.hstack(sa_losses).sum(dim=-1, keepdim=True)
+        return after_melt_loss
+
 
     @property
     def all_layers(self):
@@ -541,12 +627,12 @@ class MetaNetCompareBaseline(nn.Module):
         tensor = self._first_layer(x)
         residual = None
         for idx, meta_layer in enumerate(self._meta_layer_list, start=1):
-            # if idx % 2 == 1 and self.residual_skip:
-            if self.residual_skip:
+            if idx % 2 == 1 and self.residual_skip:
+            # if self.residual_skip:
                 residual = tensor
             tensor = meta_layer(tensor)
-            # if idx % 2 == 0 and self.residual_skip:
-            if self.residual_skip:
+            if idx % 2 == 0 and self.residual_skip:
+            # if self.residual_skip:
                 tensor = tensor + residual
         tensor = self._last_layer(tensor)
         return tensor

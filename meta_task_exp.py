@@ -25,6 +25,7 @@ from experiments.meta_task_utility import (ToFloat, new_storage_df, train_task, 
 from experiments.robustness_tester import test_robustness
 from plot_3d_trajectories import plot_single_3d_trajectories_by_layer, plot_grouped_3d_trajectories_by_layer
 
+
 if platform.node() == 'CarbonX':
     debug = True
     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
@@ -33,8 +34,10 @@ if platform.node() == 'CarbonX':
 else:
     debug = False
 
+
 from network import MetaNet, FixTypes
 from functionalities_test import test_for_fixpoints
+
 
 utility_transforms = Compose([ToTensor(), ToFloat(), Resize((15, 15)), Flatten(start_dim=0)])  # , AddGaussianNoise()])
 WORKER = 10 if not debug else 2
@@ -62,17 +65,24 @@ if __name__ == '__main__':
 
     training = True
     plotting = True
-    robustnes = True
-    n_st = 1            # per batch !!
-    activation = None   # nn.ReLU()
+    robustnes = False
+    n_st = 300          # per batch !!
+    activation = None  # nn.ReLU()
 
-    for weight_hidden_size in [3]:
+    train_to_task_first = True
+    min_task_acc = 0.85
+
+    residual_skip = True
+    add_gauss = False
+
+    alpha_st_modulator = 0
+
+    for weight_hidden_size in [5]:
 
         weight_hidden_size = weight_hidden_size
-        residual_skip = False
         n_seeds = 3
-        depth = 5
-        width = 3
+        depth = 3
+        width = 5
         out = 10
 
         data_path = Path('data')
@@ -80,13 +90,17 @@ if __name__ == '__main__':
 
         # noinspection PyUnresolvedReferences
         ac_str = f'_{activation.__class__.__name__}' if activation is not None else ''
-        res_str = f'{"" if residual_skip else "_no_res"}'
+        a_str = f'_aStM_{alpha_st_modulator}' if alpha_st_modulator not in [1, 0] else ''
+        res_str = '_no_res' if not residual_skip else ''
         st_str = f'_nst_{n_st}'
+        tsk_str = f'_tsktr_{min_task_acc}' if train_to_task_first else ''
+        w_str = f'_w{width}wh{weight_hidden_size}d{depth}'
 
-        config_str = f'{res_str}{ac_str}{st_str}'
-        exp_path = Path('output') / f'mn_st_{EPOCH}_{weight_hidden_size}{config_str}'
+        config_str = f'{res_str}{ac_str}{st_str}{tsk_str}{a_str}{w_str}'
+        exp_path = Path('output') / f'mn_st_{EPOCH}{config_str}'
+        last_accuracy = 0
 
-        for seed in range(n_seeds):
+        for seed in range(0, n_seeds):
             seed_path = exp_path / str(seed)
 
             df_store_path = seed_path / 'train_store.csv'
@@ -135,16 +149,20 @@ if __name__ == '__main__':
                             weight_log = (epoch, particle.name, *flat_for_store(particle.parameters()))
                             weight_store.loc[weight_store.shape[0]] = weight_log
 
+                    do_self_train = not train_to_task_first or last_accuracy >= min_task_acc
+                    train_to_task_first = train_to_task_first if not do_self_train else False
+
                     for batch, (batch_x, batch_y) in tqdm(enumerate(train_loader),
                                                           total=len(train_loader), desc='MetaNet Train - Batch'
                                                           ):
                         # Self Train
-                        self_train_loss = metanet.combined_self_train(n_st_per_batch,
-                                                                      reduction='mean', per_particle=False)
-                        # noinspection PyUnboundLocalVariable
-                        st_step_log = dict(Metric='Self Train Loss', Score=self_train_loss.item())
-                        st_step_log.update(dict(Epoch=epoch, Batch=batch))
-                        train_store.loc[train_store.shape[0]] = st_step_log
+                        if do_self_train:
+                            self_train_loss = metanet.combined_self_train(n_st_per_batch, alpha=alpha_st_modulator,
+                                                                          reduction='mean', per_particle=False)
+                            # noinspection PyUnboundLocalVariable
+                            st_step_log = dict(Metric='Self Train Loss', Score=self_train_loss.item())
+                            st_step_log.update(dict(Epoch=epoch, Batch=batch))
+                            train_store.loc[train_store.shape[0]] = st_step_log
 
                         # Task Train
                         tsk_step_log, y_pred = train_task(metanet, optimizer, loss_fn, batch_x, batch_y)
@@ -152,11 +170,12 @@ if __name__ == '__main__':
                         train_store.loc[train_store.shape[0]] = tsk_step_log
                         metric(y_pred.cpu(), batch_y.cpu())
 
+                    last_accuracy = metric.compute().item()
                     if is_validation_epoch:
                         metanet = metanet.eval()
                         try:
                             validation_log = dict(Epoch=int(epoch), Batch=BATCHSIZE,
-                                                  Metric=f'Train {VAL_METRIC_NAME}', Score=metric.compute().item())
+                                                  Metric=f'Train {VAL_METRIC_NAME}', Score=last_accuracy)
                             train_store.loc[train_store.shape[0]] = validation_log
                         except RuntimeError:
                             pass
@@ -208,7 +227,7 @@ if __name__ == '__main__':
                 weight_store.to_csv(weight_store_path, mode='a', header=not weight_store_path.exists(), index=False)
 
             try:
-                model_path = next(seed_path.glob(f'*{FINAL_CHECKPOINT_NAME}'))
+                model_path = next(seed_path.glob(f'{FINAL_CHECKPOINT_NAME}'))
             except StopIteration:
                 print('Model pattern did not trigger.')
                 print(f'Search path was: {seed_path}:')

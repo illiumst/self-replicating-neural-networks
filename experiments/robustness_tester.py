@@ -45,10 +45,9 @@ def test_robustness(model_path, noise_levels=10, seeds=10, log_step_size=10):
     time_to_vergence = [[0 for _ in range(noise_levels)] for _ in range(len(networks))]
     time_as_fixpoint = [[0 for _ in range(noise_levels)] for _ in range(len(networks))]
     row_headers = []
-
     df = pd.DataFrame(columns=['setting', 'Noise Level', 'Self Train Steps', 'absolute_loss',
                                'Time to convergence', 'Time as fixpoint'])
-    with tqdm(total=(seeds * noise_levels * len(networks))) as pbar:
+    with tqdm(total=(seeds * noise_levels * len(networks)), desc='Per Particle Robustness') as pbar:
         for setting, fixpoint in enumerate(networks):  # 1 / n
             row_headers.append(fixpoint.name)
             for seed in range(seeds):  # n / 1

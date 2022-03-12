@@ -19,7 +19,7 @@ from plot_3d_trajectories import plot_single_3d_trajectories_by_layer, plot_grou
 
 WORKER = 0
 BATCHSIZE = 50
-EPOCH = 30
+EPOCH = 60
 VALIDATION_FRQ = 3
 VAL_METRIC_CLASS = torchmetrics.MeanAbsoluteError
 # noinspection PyProtectedMember
@@ -34,15 +34,19 @@ if __name__ == '__main__':
 
     training = False
     plotting = True
-    n_st = 100
+    robustness = True
+    attack = False
+    attack_ratio = 0.01
+    melt = False
+    melt_ratio = 0.01
+    n_st = 200
     activation = None  # nn.ReLU()
 
-    for weight_hidden_size in [2]:
+    for weight_hidden_size in [3]:
 
-        tsk_threshold = 0.85
         weight_hidden_size = weight_hidden_size
         residual_skip = True
-        n_seeds = 3
+        n_seeds = 10
         depth = 3
         width = 3
         out = 1
@@ -53,10 +57,13 @@ if __name__ == '__main__':
         # noinspection PyUnresolvedReferences
         ac_str = f'_{activation.__class__.__name__}' if activation is not None else ''
         res_str = f'{"" if residual_skip else "_no_res"}'
+        att_str = f'_att_{attack_ratio}' if attack else ''
+        mlt_str = f'_mlt_{melt_ratio}' if melt else ''
+        w_str = f'_w{width}wh{weight_hidden_size}d{depth}'
         # dr_str = f'{f"_dr_{dropout}" if dropout != 0 else ""}'
 
-        config_str = f'{res_str}'
-        exp_path = Path('output') / f'add_st_{EPOCH}_{weight_hidden_size}{config_str}{ac_str}'
+        config_str = f'{res_str}{att_str}{ac_str}{mlt_str}{w_str}'
+        exp_path = Path('output') / f'add_st_{EPOCH}{config_str}'
 
         # if not training:
         #     # noinspection PyRedeclaration
@@ -112,6 +119,20 @@ if __name__ == '__main__':
                         st_step_log = dict(Metric='Self Train Loss', Score=self_train_loss.item())
                         st_step_log.update(dict(Epoch=epoch, Batch=batch))
                         train_store.loc[train_store.shape[0]] = st_step_log
+
+                        # Attack
+                        if attack:
+                            after_attack_loss = metanet.make_particles_attack(attack_ratio)
+                            st_step_log = dict(Metric='After Attack Loss', Score=after_attack_loss.item())
+                            st_step_log.update(dict(Epoch=epoch, Batch=batch))
+                            train_store.loc[train_store.shape[0]] = st_step_log
+
+                        # Melt
+                        if melt:
+                            after_melt_loss = metanet.make_particles_melt(melt_ratio)
+                            st_step_log = dict(Metric='After Melt Loss', Score=after_melt_loss.item())
+                            st_step_log.update(dict(Epoch=epoch, Batch=batch))
+                            train_store.loc[train_store.shape[0]] = st_step_log
 
                         # Task Train
                         tsk_step_log, y_pred = train_task(metanet, optimizer, loss_fn, batch_x, batch_y)
@@ -200,17 +221,20 @@ if __name__ == '__main__':
                 except ValueError as e:
                     print('ERROR:', e)
                 try:
+                    tqdm.write('Trajectory plotting ...')
                     plot_single_3d_trajectories_by_layer(model_path, weight_store_path, status_type=ft.identity_func)
                     plot_single_3d_trajectories_by_layer(model_path, weight_store_path, status_type=ft.other_func)
                     plot_grouped_3d_trajectories_by_layer(model_path, weight_store_path, status_type=ft.identity_func)
                     plot_grouped_3d_trajectories_by_layer(model_path, weight_store_path, status_type=ft.other_func)
+                    tqdm.write('Trajectory plotting Done')
                 except ValueError as e:
                     print('ERROR:', e)
-                try:
-                    test_robustness(model_path, seeds=10)
-                    pass
-                except ValueError as e:
-                    print('ERROR:', e)
+                if robustness:
+                    try:
+                        test_robustness(model_path, seeds=10)
+                        pass
+                    except ValueError as e:
+                        print('ERROR:', e)
 
         if 2 <= n_seeds == sum(list(x.is_dir() for x in exp_path.iterdir())):
             if plotting:
