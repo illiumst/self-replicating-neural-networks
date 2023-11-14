@@ -2,15 +2,7 @@
 ### Pruning Networks by SRNN 
 ###### Deadline: 28.02.22
 
-
-Data Exchange: [Google Drive Folder](***REMOVED***)
-
-Paper Template: [Overleaf Project](***REMOVED***)
-
-
 ## Experimente
-
-
 
 ### Fixpoint Tests:
     
